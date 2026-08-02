@@ -1,8 +1,10 @@
 # Architecture
 
-This document describes the intended production architecture for Nerve.
-The current repository implements the product interface and a simulated domain
-model; backend services and runtime adapters remain roadmap work.
+This document describes Nerve's current modular-monolith foundation and its
+target production architecture. The repository implements authenticated
+control APIs, PostgreSQL persistence, encrypted runtime connections, and live
+OpenClaw/Hermes request adapters. Durable event ingestion and multi-tenant
+policy remain roadmap work.
 
 ## Goals
 
@@ -101,9 +103,11 @@ and retention policy.
 
 ### Control API
 
-The API serves workspaces, agents, missions, runs, trace summaries, artifacts,
-and conversations. It never talks directly to a runtime; commands go through
-policy and the command bus.
+The current API serves runtime connections, discovered agents, skills, and
+actions. It authenticates every private route, validates runtime endpoints,
+persists actions before delivery, and writes audits. In the modular-monolith
+phase the API invokes adapters in-process; the target architecture moves this
+delivery behind a durable command bus.
 
 ### Policy and approvals
 
@@ -113,9 +117,10 @@ approval.
 
 ### Command bus
 
-The bus persists every command before delivery, uses idempotency keys, records
-acknowledgements, and retries only where the adapter declares safe retry
-semantics.
+The current action ledger persists every command before delivery, enforces
+unique idempotency keys, and records runtime responses. A separate retrying
+worker/queue is planned; request-time delivery does not currently retry
+ambiguous failures.
 
 ### Live event gateway
 
@@ -183,21 +188,18 @@ state confirms the transition.
 
 ## Deployment
 
-A production deployment can begin as a modular monolith:
+The shipped Railway deployment is a modular monolith:
 
-- web and Control API;
-- background normalizer and command worker;
-- Postgres;
-- durable queue;
-- object storage for artifacts;
-- WebSocket or SSE gateway.
+- Next.js web UI and Control API;
+- in-process OpenClaw and Hermes adapters;
+- PostgreSQL for connections, skill assignments, actions, and audits.
 
-Split services only when scale, failure isolation, or team ownership makes the
-boundary valuable.
+Add a durable queue, background adapter workers, object storage, and a live
+event gateway before high-volume or multi-tenant use. See
+[Production readiness](PRODUCTION.md) and [Railway](RAILWAY.md).
 
 ## Architectural decisions
 
 Material decisions should be recorded as short Architecture Decision Records
 under `docs/decisions/`. Each record should include context, decision,
 consequences, and status.
-

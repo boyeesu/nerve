@@ -33,9 +33,10 @@
 </p>
 
 > [!IMPORTANT]
-> Nerve is currently a public-alpha interface prototype. The dashboard,
-> interactions, and normalized domain model are implemented; live OpenClaw and
-> Hermes adapters are the next major milestone.
+> Nerve is a public-alpha, single-operator control plane. Live Hermes HTTP and
+> OpenClaw Gateway adapters, encrypted connections, commands, skill management,
+> PostgreSQL persistence, audit events, and Railway packaging are implemented.
+> Runtime compatibility is not guaranteed until `v1.0`.
 
 ## Why Nerve
 
@@ -53,19 +54,26 @@ Nerve sits above individual runtimes and gives operators one legible surface:
 The goal is not to replace agent runtimes. It is to make operating many of them
 calm, observable, and safe.
 
-## Current prototype
+## What works today
 
 - Unified OpenClaw and Hermes agent map
+- Server-side OpenClaw Gateway protocol-v4 connection and agent discovery
+- Server-side Hermes API connection, capabilities, runs, stop, and approvals
 - Working, waiting, completed, and idle states
 - Agent filtering and canvas zoom
 - Run inspection with progress, trace, model, token, and timing data
-- Pause and resume controls
-- Direct operator-to-agent questions
+- Direct commands and stop controls with idempotency records
+- Direct operator-to-agent questions that start runtime-native work
+- OpenClaw ClawHub skill installation per agent
+- Hermes installed-skill discovery and Nerve-side assignment
+- Encrypted credentials, authenticated APIs, endpoint SSRF policy, and audits
+- PostgreSQL migrations and production health checks
 - Fleet-wide command bar
 - Responsive layouts for desktop and smaller screens
 
-The sample agents and responses are simulated. See the
-[roadmap](docs/ROADMAP.md) for the path to live integrations.
+The dashboard falls back to sample agents until a live runtime is connected.
+See [Connecting runtimes](docs/CONNECTIONS.md) for supported APIs and network
+requirements.
 
 ## Quickstart
 
@@ -73,6 +81,7 @@ The sample agents and responses are simulated. See the
 
 - Node.js 22.13 or newer
 - npm 10 or newer
+- PostgreSQL 15 or newer
 
 ### Run locally
 
@@ -80,10 +89,24 @@ The sample agents and responses are simulated. See the
 git clone https://github.com/boyeesu/nerve.git
 cd nerve
 npm install
-npm run dev
+cp .env.example .env.local
 ```
 
-Open the local URL printed in your terminal.
+Fill `DATABASE_URL`, `NERVE_ENCRYPTION_KEY`, `NERVE_SESSION_SECRET`, and
+`NERVE_ADMIN_TOKEN`, then initialize and run:
+
+```bash
+npm run db:migrate
+npm run dev:next
+```
+
+Open the local URL and unlock Nerve with `NERVE_ADMIN_TOKEN`.
+
+### Deploy on Railway
+
+Nerve includes a Docker image, config-as-code, pre-deploy migrations, a
+PostgreSQL service contract, and readiness checks. Follow the
+[Railway deployment guide](docs/RAILWAY.md).
 
 ### Validate a change
 
@@ -121,13 +144,14 @@ runs, events, messages, commands, approvals, and artifacts. Read
 
 | Area | Status |
 | --- | --- |
-| Product interface | Interactive prototype |
-| Normalized domain model | Draft specification |
-| OpenClaw adapter | Planned |
-| Hermes adapter | Planned |
-| Live event transport | Planned |
-| Authentication and tenancy | Planned |
-| Policy and approvals | Planned |
+| Product interface | Live connection-aware alpha |
+| Connection persistence | PostgreSQL + encrypted credentials |
+| OpenClaw adapter | Protocol-v4 subset; pairing, agents, commands, skills |
+| Hermes adapter | HTTP API; capabilities, runs, actions, skills |
+| Live event transport | Poll/request foundation; durable streaming planned |
+| Authentication | Single-operator secure session |
+| Tenancy and RBAC | Planned |
+| Policy engine | Runtime approvals supported; central policy planned |
 
 No production compatibility promise is made before `v1.0.0`. Breaking changes
 will be documented in [CHANGELOG.md](CHANGELOG.md).
@@ -138,6 +162,9 @@ will be documented in [CHANGELOG.md](CHANGELOG.md).
 | --- | --- |
 | [Architecture](docs/ARCHITECTURE.md) | System boundaries, services, data flow, safety, and deployment |
 | [Adapter contract](docs/ADAPTERS.md) | Runtime-neutral types, events, capabilities, and commands |
+| [Connecting runtimes](docs/CONNECTIONS.md) | OpenClaw/Hermes setup, pairing, scopes, and network access |
+| [Production readiness](docs/PRODUCTION.md) | Implemented controls and remaining stable-release gates |
+| [Railway deployment](docs/RAILWAY.md) | Docker, PostgreSQL, variables, health checks, and template definition |
 | [Development](docs/DEVELOPMENT.md) | Setup, project layout, testing, and local workflows |
 | [Roadmap](docs/ROADMAP.md) | Milestones from prototype to stable release |
 | [Governance](GOVERNANCE.md) | Decision-making, roles, and project stewardship |

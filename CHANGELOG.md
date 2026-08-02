@@ -13,6 +13,15 @@ changes.
 - Open-source community documentation and contribution templates
 - Nerve logo and product screenshot
 - Continuous-integration workflow
+- Authenticated control-plane APIs and secure runtime onboarding
+- Encrypted PostgreSQL connection registry, skill assignments, action ledger,
+  and audit events
+- Hermes HTTP and OpenClaw Gateway protocol-v4 adapter foundations
+- Live agent discovery, operator commands, stop controls, and skill drill-down
+- Railway Docker/config-as-code packaging, migrations, and readiness health
+  checks
+- Endpoint SSRF policy, pinned dependency install-script policy, and production
+  security headers
 
 ## 0.1.0 — 2026-08-02
 
@@ -25,4 +34,3 @@ changes.
 - Direct agent Q&A prototype
 - Fleet-wide command bar
 - Responsive layouts
-
