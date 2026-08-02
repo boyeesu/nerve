@@ -1,0 +1,56 @@
+name: Runtime adapter request
+description: Propose support for another agent runtime
+title: "[Adapter]: "
+labels:
+  - adapter
+  - enhancement
+body:
+  - type: input
+    id: runtime
+    attributes:
+      label: Runtime
+      placeholder: Runtime name and official website
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: Official API documentation
+    validations:
+      required: true
+  - type: textarea
+    id: use_case
+    attributes:
+      label: Use case
+      description: Who needs this integration and what should they be able to do?
+    validations:
+      required: true
+  - type: textarea
+    id: interfaces
+    attributes:
+      label: Runtime interfaces
+      description: Authentication, events/webhooks, commands, artifacts, and versioning.
+    validations:
+      required: true
+  - type: textarea
+    id: capabilities
+    attributes:
+      label: Expected Nerve capabilities
+      description: Observe runs, send messages, pause, resume, cancel, and so on.
+    validations:
+      required: true
+  - type: textarea
+    id: maintainer
+    attributes:
+      label: Maintainer plan
+      description: Who can implement, test, and maintain the adapter?
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I reviewed the draft adapter contract.
+          required: true
+        - label: The linked documentation is official and publicly accessible.
+          required: true
+

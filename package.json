@@ -1,8 +1,24 @@
 {
-  "name": "manclaw",
+  "name": "nerve",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
+  "description": "Open-source visual command center for OpenClaw and Hermes agent fleets.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/boyeesu/nerve.git"
+  },
+  "homepage": "https://github.com/boyeesu/nerve#readme",
+  "bugs": {
+    "url": "https://github.com/boyeesu/nerve/issues"
+  },
+  "keywords": [
+    "agent-orchestration",
+    "ai-agents",
+    "openclaw",
+    "hermes",
+    "command-center"
+  ],
   "engines": {
     "node": ">=22.13.0"
   },

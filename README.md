@@ -1,63 +1,91 @@
-# ManClaw
+<p align="center">
+  <img src="public/assets/nerve-logo.png" alt="Nerve command-center robot mascot" width="280" />
+</p>
 
-ManClaw is an open-source visual command center for fleets of OpenClaw and
-Hermes agents.
-Instead of switching between individual agent runtimes, operators get one
-spatial map of every agent, its mission, current work, status, and conversation.
+<h1 align="center">Nerve</h1>
 
-The current interface prototype is codenamed **Nerve**.
+<p align="center">
+  <strong>See every agent. Understand every run. Command the whole fleet.</strong>
+</p>
 
-## Prototype
+<p align="center">
+  An open-source visual command center for OpenClaw and Hermes agents.
+</p>
 
-The first version demonstrates the core operating loop:
+<p align="center">
+  <a href="https://github.com/boyeesu/nerve/actions/workflows/ci.yml"><img src="https://github.com/boyeesu/nerve/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6.svg" alt="MIT license" /></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22-4f9b45.svg" alt="Node 22 or newer" /></a>
+  <a href="docs/ROADMAP.md"><img src="https://img.shields.io/badge/status-public_alpha-f0a52b.svg" alt="Public alpha" /></a>
+</p>
 
-- view OpenClaw and Hermes agents on one mission map;
-- filter agents by working, waiting, and completed states;
-- zoom the fleet canvas;
-- select an agent to inspect its task, progress, runtime, trace, and metrics;
-- pause or resume an agent run;
-- ask a selected agent questions without leaving the command center;
-- issue a command to the whole fleet from the shared command bar.
+<p align="center">
+  <a href="#quickstart">Quickstart</a> ·
+  <a href="#why-nerve">Why Nerve</a> ·
+  <a href="docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="docs/ADAPTERS.md">Adapter contract</a> ·
+  <a href="docs/ROADMAP.md">Roadmap</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
 
-The current agent data and responses are simulated. The interface is structured
-so real runtime events can replace the sample data without changing the product
-model.
+<p align="center">
+  <img src="public/assets/nerve-dashboard.png" alt="Nerve dashboard showing OpenClaw and Hermes agents on a live mission map" width="100%" />
+</p>
 
-## Integration model
+> [!IMPORTANT]
+> Nerve is currently a public-alpha interface prototype. The dashboard,
+> interactions, and normalized domain model are implemented; live OpenClaw and
+> Hermes adapters are the next major milestone.
 
-Nerve should treat OpenClaw and Hermes as adapters behind a shared event model:
+## Why Nerve
 
-```text
-OpenClaw ─┐
-          ├─ Runtime adapters ─ Event normalizer ─ Mission graph ─ Live UI
-Hermes  ──┘                         │                    │
-                                   ├─ Command bus       ├─ Agent inspector
-                                   ├─ Trace store       └─ Conversation relay
-                                   └─ Policy/approval engine
-```
+Agent runtimes are good at running agents. They are not always the best place
+to understand a whole organization of agents at once.
 
-Each adapter should normalize these primitives:
+Nerve sits above individual runtimes and gives operators one legible surface:
 
-- `agent`: identity, runtime, capabilities, model, health;
-- `run`: task, state, progress, timestamps, token and cost metrics;
-- `event`: thought-safe summary, tool call, approval request, output, error;
-- `message`: operator-to-agent and agent-to-operator conversation;
-- `command`: start, pause, resume, cancel, reassign, broadcast;
-- `artifact`: file, report, code change, link, or structured result.
+- a spatial map of agents, missions, handoffs, and dependencies;
+- a live view of what each agent is doing and why it needs attention;
+- one conversation layer across OpenClaw and Hermes;
+- fleet-wide commands with explicit approval and audit boundaries;
+- runtime-neutral traces, metrics, artifacts, and memory references.
 
-For a production service, use an ingestion gateway for runtime webhooks and
-streaming events, a command bus for reversible control actions, Postgres for
-missions and traces, and a WebSocket or Server-Sent Events channel for the live
-map. Runtime credentials should remain encrypted and scoped per workspace.
+The goal is not to replace agent runtimes. It is to make operating many of them
+calm, observable, and safe.
 
-## Local development
+## Current prototype
+
+- Unified OpenClaw and Hermes agent map
+- Working, waiting, completed, and idle states
+- Agent filtering and canvas zoom
+- Run inspection with progress, trace, model, token, and timing data
+- Pause and resume controls
+- Direct operator-to-agent questions
+- Fleet-wide command bar
+- Responsive layouts for desktop and smaller screens
+
+The sample agents and responses are simulated. See the
+[roadmap](docs/ROADMAP.md) for the path to live integrations.
+
+## Quickstart
+
+### Requirements
+
+- Node.js 22.13 or newer
+- npm 10 or newer
+
+### Run locally
 
 ```bash
+git clone https://github.com/boyeesu/nerve.git
+cd nerve
 npm install
 npm run dev
 ```
 
-Validation:
+Open the local URL printed in your terminal.
+
+### Validate a change
 
 ```bash
 npm run build
@@ -65,6 +93,73 @@ node --test tests/rendered-html.test.mjs
 npm run lint
 ```
 
+## How it fits together
+
+```mermaid
+flowchart LR
+    OC["OpenClaw"] --> OCA["OpenClaw adapter"]
+    HE["Hermes"] --> HEA["Hermes adapter"]
+    OCA --> EN["Event normalizer"]
+    HEA --> EN
+    EN --> MG["Mission graph"]
+    EN --> TS["Trace store"]
+    UI["Nerve UI"] <--> API["Control API"]
+    API <--> MG
+    API <--> TS
+    API --> CB["Command bus"]
+    CB --> OCA
+    CB --> HEA
+    PE["Policy + approvals"] --> CB
+```
+
+Nerve treats each runtime as an adapter behind a shared model for agents,
+runs, events, messages, commands, approvals, and artifacts. Read
+[Architecture](docs/ARCHITECTURE.md) for system boundaries and
+[Adapter contract](docs/ADAPTERS.md) for the proposed integration interface.
+
+## Project status
+
+| Area | Status |
+| --- | --- |
+| Product interface | Interactive prototype |
+| Normalized domain model | Draft specification |
+| OpenClaw adapter | Planned |
+| Hermes adapter | Planned |
+| Live event transport | Planned |
+| Authentication and tenancy | Planned |
+| Policy and approvals | Planned |
+
+No production compatibility promise is made before `v1.0.0`. Breaking changes
+will be documented in [CHANGELOG.md](CHANGELOG.md).
+
+## Documentation
+
+| Document | Purpose |
+| --- | --- |
+| [Architecture](docs/ARCHITECTURE.md) | System boundaries, services, data flow, safety, and deployment |
+| [Adapter contract](docs/ADAPTERS.md) | Runtime-neutral types, events, capabilities, and commands |
+| [Development](docs/DEVELOPMENT.md) | Setup, project layout, testing, and local workflows |
+| [Roadmap](docs/ROADMAP.md) | Milestones from prototype to stable release |
+| [Governance](GOVERNANCE.md) | Decision-making, roles, and project stewardship |
+| [Contributing](CONTRIBUTING.md) | How to propose, build, test, and submit changes |
+| [Security](SECURITY.md) | Supported versions and responsible disclosure |
+| [Support](SUPPORT.md) | Where to ask questions and report problems |
+| [Code of Conduct](CODE_OF_CONDUCT.md) | Community participation standards |
+
+## Contributing
+
+Contributions are welcome, especially around runtime adapters, event
+normalization, observability, accessibility, and operator safety.
+
+Start with [CONTRIBUTING.md](CONTRIBUTING.md), review the
+[architecture](docs/ARCHITECTURE.md), and use the repository issue forms before
+beginning a large change.
+
+## Security
+
+Please do not report vulnerabilities in public issues. Follow the private
+disclosure process in [SECURITY.md](SECURITY.md).
+
 ## License
 
-[MIT](LICENSE)
+Nerve is available under the [MIT License](LICENSE).
