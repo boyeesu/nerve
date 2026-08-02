@@ -3,7 +3,15 @@
 Adapters connect agent runtimes to Nerve without teaching the core about
 runtime-native APIs.
 
-This is a draft contract for discussion and implementation.
+The runtime-neutral contract remains a draft. The first concrete adapters live
+under `lib/adapters/`:
+
+- Hermes uses the documented HTTP API for health, capabilities, runs, actions,
+  and read-only skill discovery.
+- OpenClaw implements the documented Gateway protocol-v4 subset for pairing,
+  agent discovery, commands, stopping sessions, and per-agent skills.
+
+See [CONNECTIONS.md](CONNECTIONS.md) for operator setup and current limitations.
 
 ## Responsibilities
 
@@ -180,4 +188,3 @@ Every adapter should ship fixtures covering:
 Use the adapter-request issue form. Include the runtime's official
 documentation, authentication model, event transport, command surface,
 versioning policy, and a maintainer plan.
-
