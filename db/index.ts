@@ -1,13 +1,26 @@
-import { env } from "cloudflare:workers";
-import { drizzle } from "drizzle-orm/d1";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import * as schema from "./schema";
 
+let client: ReturnType<typeof postgres> | undefined;
+
 export function getDb() {
-  if (!env.DB) {
-    throw new Error(
-      "Cloudflare D1 binding `DB` is unavailable. Set the `d1` field in .openai/hosting.json to `DB` or let your control plane inject the real binding values before using the database."
-    );
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is required for Nerve persistence.");
   }
 
-  return drizzle(env.DB, { schema });
+  client ??= postgres(databaseUrl, {
+    max: Number(process.env.DATABASE_POOL_SIZE ?? 10),
+    idle_timeout: 20,
+    connect_timeout: 10,
+    ssl: process.env.DATABASE_SSL === "disable" ? false : "prefer",
+  });
+
+  return drizzle(client, { schema });
+}
+
+export function getSqlClient() {
+  getDb();
+  return client!;
 }

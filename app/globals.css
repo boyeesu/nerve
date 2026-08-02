@@ -90,6 +90,21 @@ button {
 .brandMark span:nth-child(2) { height: 14px; }
 .brandMark span:nth-child(3) { height: 5px; }
 
+.brandLogo {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.brandLogo.large {
+  width: 54px;
+  height: 54px;
+  border: 1px solid #e0e5df;
+  border-radius: 12px;
+}
+
 .brandTag {
   padding: 4px 6px;
   border: 1px solid #414642;
@@ -1255,6 +1270,328 @@ button {
   color: #aeb4af;
   background: #edf0ed;
   cursor: default;
+}
+
+.shell.isLocked {
+  filter: blur(10px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.authGate,
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(13, 16, 14, .72);
+  backdrop-filter: blur(8px);
+}
+
+.authCard,
+.connectModal {
+  width: min(100%, 430px);
+  padding: 28px;
+  border: 1px solid #39403a;
+  border-radius: 14px;
+  background: #fbfcfa;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .32);
+}
+
+.authCard {
+  display: grid;
+  justify-items: start;
+  gap: 13px;
+}
+
+.brandMark.large {
+  width: 42px;
+  height: 42px;
+  grid-template-columns: repeat(3, 7px);
+  gap: 3px;
+}
+
+.brandMark.large span {
+  width: 7px;
+}
+
+.brandMark.large span:nth-child(1) { height: 13px; }
+.brandMark.large span:nth-child(2) { height: 23px; }
+.brandMark.large span:nth-child(3) { height: 8px; }
+
+.authCard h1,
+.connectModal h2 {
+  margin: 0;
+  font-size: 24px;
+  letter-spacing: -.035em;
+}
+
+.authCard p,
+.securityNote {
+  margin: 0;
+  color: #717872;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.authCard input,
+.connectModal input,
+.connectModal select,
+.skillAdd input {
+  width: 100%;
+  height: 42px;
+  padding: 0 12px;
+  outline: 0;
+  border: 1px solid #d3d9d3;
+  border-radius: 7px;
+  background: #fff;
+  font-size: 11px;
+}
+
+.authCard input:focus,
+.connectModal input:focus,
+.connectModal select:focus,
+.skillAdd input:focus {
+  border-color: #161917;
+  box-shadow: 0 0 0 3px rgba(184, 245, 85, .28);
+}
+
+.authCard .button {
+  width: 100%;
+  height: 40px;
+  justify-content: center;
+}
+
+.formError {
+  width: 100%;
+  padding: 9px 10px;
+  color: #912f2f;
+  border: 1px solid #eac2c2;
+  border-radius: 6px;
+  background: #fff1f1;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.modalBackdrop {
+  z-index: 110;
+}
+
+.connectModal {
+  display: grid;
+  gap: 15px;
+}
+
+.modalHead,
+.modalActions,
+.skillAdd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modalHead {
+  justify-content: space-between;
+  margin-bottom: 3px;
+}
+
+.connectModal label {
+  display: grid;
+  gap: 7px;
+  color: #515852;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.connectModal .checkLabel {
+  grid-template-columns: 17px 1fr;
+  align-items: center;
+  gap: 8px;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.checkLabel input {
+  width: 15px;
+  height: 15px;
+  accent-color: #202420;
+}
+
+.securityNote {
+  padding: 10px 11px;
+  border-left: 3px solid var(--lime);
+  background: #f0f5ec;
+}
+
+.modalActions {
+  justify-content: flex-end;
+  margin-top: 3px;
+}
+
+.notice {
+  position: fixed;
+  z-index: 120;
+  right: 20px;
+  bottom: 20px;
+  max-width: 390px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  color: #f6f8f5;
+  border: 1px solid #3d443f;
+  border-radius: 8px;
+  background: #1d211e;
+  box-shadow: 0 18px 45px rgba(0, 0, 0, .25);
+  cursor: pointer;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.notice b {
+  color: #aab0ab;
+}
+
+.connectButton {
+  height: 31px;
+  padding: 0 10px;
+  color: #1c211b;
+  border: 0;
+  border-radius: 6px;
+  background: var(--lime);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.offlineDot {
+  width: 7px;
+  height: 7px;
+  display: inline-block;
+  border-radius: 50%;
+  background: #8e958f;
+}
+
+.inspectorTabs {
+  position: sticky;
+  z-index: 3;
+  top: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: -16px -18px 14px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+
+.inspectorTabs button {
+  height: 40px;
+  color: #858c87;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: #fff;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.inspectorTabs button.active {
+  color: #181b19;
+  border-bottom-color: #181b19;
+}
+
+.skillsPanel {
+  display: grid;
+  gap: 16px;
+}
+
+.skillsIntro h3 {
+  margin: 8px 0 5px;
+  font-size: 15px;
+}
+
+.skillsIntro p {
+  margin: 0;
+  color: #7a817c;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.skillAdd input {
+  flex: 1;
+  height: 36px;
+}
+
+.skillAdd .button {
+  height: 36px;
+}
+
+.skillList {
+  display: grid;
+  gap: 8px;
+}
+
+.skillCard {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid #e0e4e0;
+  border-radius: 8px;
+  background: #fafbf9;
+}
+
+.skillGlyph {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: #edf6e6;
+}
+
+.skillCard strong {
+  display: block;
+  font-size: 9px;
+}
+
+.skillCard p {
+  margin: 4px 0 0;
+  color: #858c87;
+  font-size: 7px;
+  line-height: 1.4;
+}
+
+.skillOn,
+.skillOff {
+  padding: 4px 6px;
+  border-radius: 9px;
+  font-size: 6px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.skillOn {
+  color: #33754b;
+  background: #e6f4e8;
+}
+
+.skillOff {
+  color: #7b5d24;
+  background: #f7eccf;
+}
+
+.emptySkill {
+  padding: 24px 16px;
+  color: #858c87;
+  border: 1px dashed #ccd2cc;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 9px;
 }
 
 @media (max-width: 1180px) {

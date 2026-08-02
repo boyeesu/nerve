@@ -18,25 +18,28 @@ Status: **complete**
 
 ## Phase 1 — Runtime foundation
 
-Status: **next**
+Status: **in progress**
 
 - Publish versioned adapter contract
-- Implement connection registry and capability negotiation
+- [x] Implement encrypted connection registry and capability negotiation
 - Build event ingestion and normalized state reducer
-- Add OpenClaw adapter
-- Add Hermes adapter
-- Replace sample fleet data with live streams
+- [x] Add initial OpenClaw protocol-v4 adapter
+- [x] Add initial Hermes HTTP adapter
+- [x] Replace sample fleet data when connected agents are available
 - Add adapter contract fixtures and replay tests
+- [x] Add per-agent OpenClaw skill installation and Hermes skill assignment
 
 Exit criterion: operators can connect one supported instance of each runtime
 and observe live agents and runs.
 
 ## Phase 2 — Safe command
 
-- Durable command bus and idempotency
-- Pause, resume, cancel, start, and message commands
+- [x] Persist request-time commands and enforce idempotency keys
+- [x] Start/message and stop commands for supported adapter surfaces
+- Durable background command bus and ambiguous-failure reconciliation
+- Runtime-native resume where supported
 - Policy evaluation and approval-required states
-- Complete command audit trail
+- [x] Action outcomes and audit events
 - Degraded runtime and reconnect handling
 - Operator notifications for waiting and failed runs
 
@@ -79,4 +82,3 @@ The stable release requires:
 
 Open a feature or adapter request with the user problem, affected operators,
 runtime constraints, safety implications, and a proposed success measure.
-

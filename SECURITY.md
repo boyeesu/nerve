@@ -1,7 +1,9 @@
 # Security policy
 
 Nerve is pre-release software and is not yet recommended for production
-control of sensitive agent fleets.
+control of sensitive or multi-tenant agent fleets. The public alpha is intended
+for a single operator on a trusted deployment. See
+[Production readiness](docs/PRODUCTION.md).
 
 ## Supported versions
 
@@ -46,9 +48,19 @@ Extra care is required around:
 - cross-workspace data isolation;
 - model-generated content rendered in the operator interface.
 
+## Deployment requirements
+
+- Set independent high-entropy values for `NERVE_ADMIN_TOKEN`,
+  `NERVE_SESSION_SECRET`, and `NERVE_ENCRYPTION_KEY`.
+- Keep `NERVE_ALLOW_PRIVATE_NETWORKS=false` on public deployments.
+- Expose Nerve and remote runtimes only through HTTPS/WSS.
+- Put rate limiting and preferably an identity-aware proxy in front of Nerve.
+- Grant OpenClaw `operator.admin` only when skill installation is required.
+- Do not change `NERVE_ENCRYPTION_KEY` without re-encrypting saved credentials.
+- Back up PostgreSQL and verify restore procedures.
+
 ## Safe research
 
 Good-faith research that avoids privacy violations, data destruction,
 service disruption, and access beyond what is necessary to demonstrate a
 problem is welcome. Please allow reasonable remediation time before disclosure.
-
