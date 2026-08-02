@@ -1,6 +1,6 @@
 # Governance
 
-ManClaw currently uses a maintainer-led governance model appropriate for an
+Nerve currently uses a maintainer-led governance model appropriate for an
 early-stage project.
 
 ## Roles

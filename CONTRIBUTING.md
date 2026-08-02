@@ -1,4 +1,4 @@
-# Contributing to ManClaw
+# Contributing to Nerve
 
 Thank you for helping build a calmer, safer way to operate fleets of AI agents.
 All contributions—code, docs, design, testing, and thoughtful issue
@@ -23,8 +23,8 @@ tests can go directly to a pull request.
 ## Development setup
 
 ```bash
-git clone https://github.com/boyeesu/manclaw.git
-cd manclaw
+git clone https://github.com/boyeesu/nerve.git
+cd nerve
 npm install
 npm run dev
 ```

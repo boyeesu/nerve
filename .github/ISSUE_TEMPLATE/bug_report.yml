@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem in ManClaw
+description: Report a reproducible problem in Nerve
 title: "[Bug]: "
 labels:
   - bug
@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping improve ManClaw. Remove credentials, private prompts,
+        Thanks for helping improve Nerve. Remove credentials, private prompts,
         agent memory, and customer data before submitting.
   - type: textarea
     id: summary
@@ -22,7 +22,7 @@ body:
       label: Reproduction
       description: Provide the smallest reliable sequence of steps.
       placeholder: |
-        1. Start ManClaw with…
+        1. Start Nerve with…
         2. Open…
         3. Observe…
     validations:

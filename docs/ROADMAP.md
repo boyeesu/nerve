@@ -1,6 +1,6 @@
 # Roadmap
 
-ManClaw is in public alpha. This roadmap communicates direction, not guaranteed
+Nerve is in public alpha. This roadmap communicates direction, not guaranteed
 dates. Priorities may change as runtime APIs and contributor feedback evolve.
 
 ## Phase 0 — Product proof

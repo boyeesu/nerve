@@ -11,7 +11,7 @@ payloads to reach the product core would couple every feature to every runtime.
 
 ## Decision
 
-ManClaw will integrate runtimes through explicit adapters. Adapters declare
+Nerve will integrate runtimes through explicit adapters. Adapters declare
 capabilities and translate events and commands into a versioned runtime-neutral
 contract.
 

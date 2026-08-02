@@ -1,6 +1,6 @@
 # Architecture
 
-This document describes the intended production architecture for ManClaw.
+This document describes the intended production architecture for Nerve.
 The current repository implements the product interface and a simulated domain
 model; backend services and runtime adapters remain roadmap work.
 
@@ -37,7 +37,7 @@ flowchart TB
         XRA["Adapter SDK"]
     end
 
-    subgraph Core["ManClaw control plane"]
+    subgraph Core["Nerve control plane"]
         ING["Ingestion gateway"]
         NOR["Event normalizer"]
         CMD["Command bus"]

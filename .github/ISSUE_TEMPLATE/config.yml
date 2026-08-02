@@ -1,9 +1,9 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/boyeesu/manclaw/security/advisories/new
+    url: https://github.com/boyeesu/nerve/security/advisories/new
     about: Report security issues privately
   - name: Support
-    url: https://github.com/boyeesu/manclaw/blob/main/SUPPORT.md
+    url: https://github.com/boyeesu/nerve/blob/main/SUPPORT.md
     about: Find the right support channel
 

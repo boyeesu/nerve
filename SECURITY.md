@@ -1,6 +1,6 @@
 # Security policy
 
-ManClaw is pre-release software and is not yet recommended for production
+Nerve is pre-release software and is not yet recommended for production
 control of sensitive agent fleets.
 
 ## Supported versions

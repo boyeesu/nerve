@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="public/assets/manclaw-logo.png" alt="ManClaw command-center robot mascot" width="280" />
+  <img src="public/assets/nerve-logo.png" alt="Nerve command-center robot mascot" width="280" />
 </p>
 
-<h1 align="center">ManClaw</h1>
+<h1 align="center">Nerve</h1>
 
 <p align="center">
   <strong>See every agent. Understand every run. Command the whole fleet.</strong>
@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/boyeesu/manclaw/actions/workflows/ci.yml"><img src="https://github.com/boyeesu/manclaw/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+  <a href="https://github.com/boyeesu/nerve/actions/workflows/ci.yml"><img src="https://github.com/boyeesu/nerve/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-8b5cf6.svg" alt="MIT license" /></a>
   <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22-4f9b45.svg" alt="Node 22 or newer" /></a>
   <a href="docs/ROADMAP.md"><img src="https://img.shields.io/badge/status-public_alpha-f0a52b.svg" alt="Public alpha" /></a>
@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="#quickstart">Quickstart</a> ·
-  <a href="#why-manclaw">Why ManClaw</a> ·
+  <a href="#why-nerve">Why Nerve</a> ·
   <a href="docs/ARCHITECTURE.md">Architecture</a> ·
   <a href="docs/ADAPTERS.md">Adapter contract</a> ·
   <a href="docs/ROADMAP.md">Roadmap</a> ·
@@ -29,20 +29,20 @@
 </p>
 
 <p align="center">
-  <img src="public/assets/manclaw-dashboard.png" alt="ManClaw dashboard showing OpenClaw and Hermes agents on a live mission map" width="100%" />
+  <img src="public/assets/nerve-dashboard.png" alt="Nerve dashboard showing OpenClaw and Hermes agents on a live mission map" width="100%" />
 </p>
 
 > [!IMPORTANT]
-> ManClaw is currently a public-alpha interface prototype. The dashboard,
+> Nerve is currently a public-alpha interface prototype. The dashboard,
 > interactions, and normalized domain model are implemented; live OpenClaw and
 > Hermes adapters are the next major milestone.
 
-## Why ManClaw
+## Why Nerve
 
 Agent runtimes are good at running agents. They are not always the best place
 to understand a whole organization of agents at once.
 
-ManClaw sits above individual runtimes and gives operators one legible surface:
+Nerve sits above individual runtimes and gives operators one legible surface:
 
 - a spatial map of agents, missions, handoffs, and dependencies;
 - a live view of what each agent is doing and why it needs attention;
@@ -77,8 +77,8 @@ The sample agents and responses are simulated. See the
 ### Run locally
 
 ```bash
-git clone https://github.com/boyeesu/manclaw.git
-cd manclaw
+git clone https://github.com/boyeesu/nerve.git
+cd nerve
 npm install
 npm run dev
 ```
@@ -103,7 +103,7 @@ flowchart LR
     HEA --> EN
     EN --> MG["Mission graph"]
     EN --> TS["Trace store"]
-    UI["ManClaw UI"] <--> API["Control API"]
+    UI["Nerve UI"] <--> API["Control API"]
     API <--> MG
     API <--> TS
     API --> CB["Command bus"]
@@ -112,7 +112,7 @@ flowchart LR
     PE["Policy + approvals"] --> CB
 ```
 
-ManClaw treats each runtime as an adapter behind a shared model for agents,
+Nerve treats each runtime as an adapter behind a shared model for agents,
 runs, events, messages, commands, approvals, and artifacts. Read
 [Architecture](docs/ARCHITECTURE.md) for system boundaries and
 [Adapter contract](docs/ADAPTERS.md) for the proposed integration interface.
@@ -162,4 +162,4 @@ disclosure process in [SECURITY.md](SECURITY.md).
 
 ## License
 
-ManClaw is available under the [MIT License](LICENSE).
+Nerve is available under the [MIT License](LICENSE).

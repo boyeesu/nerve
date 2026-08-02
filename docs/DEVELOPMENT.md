@@ -9,8 +9,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/boyeesu/manclaw.git
-cd manclaw
+git clone https://github.com/boyeesu/nerve.git
+cd nerve
 npm install
 npm run dev
 ```

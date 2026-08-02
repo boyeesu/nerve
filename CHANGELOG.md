@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to ManClaw will be documented here.
+All notable changes to Nerve will be documented here.
 
 The project follows [Semantic Versioning](https://semver.org/) once public
 releases begin. During public alpha, minor releases may contain breaking
@@ -11,7 +11,7 @@ changes.
 ### Added
 
 - Open-source community documentation and contribution templates
-- ManClaw logo and product screenshot
+- Nerve logo and product screenshot
 - Continuous-integration workflow
 
 ## 0.1.0 — 2026-08-02

@@ -1,6 +1,6 @@
 # Runtime adapter contract
 
-Adapters connect agent runtimes to ManClaw without teaching the core about
+Adapters connect agent runtimes to Nerve without teaching the core about
 runtime-native APIs.
 
 This is a draft contract for discussion and implementation.
@@ -13,7 +13,7 @@ An adapter must:
 - declare capabilities;
 - discover or receive agent state;
 - normalize run events;
-- translate supported ManClaw commands;
+- translate supported Nerve commands;
 - verify inbound runtime events when applicable;
 - redact secrets and sensitive fields;
 - make retries and idempotency behavior explicit;
@@ -21,7 +21,7 @@ An adapter must:
 
 ## Capability declaration
 
-Capabilities prevent ManClaw from presenting controls that a runtime cannot
+Capabilities prevent Nerve from presenting controls that a runtime cannot
 safely support.
 
 ```ts
@@ -137,7 +137,7 @@ export interface RuntimeAdapter {
 
 ## Identity mapping
 
-ManClaw IDs are stable within a workspace. Adapters must keep explicit mappings
+Nerve IDs are stable within a workspace. Adapters must keep explicit mappings
 to runtime-native identifiers. A runtime identifier must never be accepted
 without matching its workspace and connection.
 

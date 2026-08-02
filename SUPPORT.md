@@ -1,6 +1,6 @@
 # Support
 
-ManClaw is an early open-source project maintained on a best-effort basis.
+Nerve is an early open-source project maintained on a best-effort basis.
 
 ## Where to go
 
@@ -18,7 +18,7 @@ Before opening an issue, search the repository and review the
 
 ## What to include
 
-Provide the ManClaw commit or version, browser and operating system, runtime
+Provide the Nerve commit or version, browser and operating system, runtime
 version when relevant, steps to reproduce, and sanitized logs or screenshots.
 Never post tokens, private prompts, agent memory, or customer data.
 

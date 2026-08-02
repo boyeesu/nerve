@@ -3,7 +3,7 @@
 ## Our pledge
 
 We as members, contributors, and leaders pledge to make participation in the
-ManClaw community a harassment-free experience for everyone, regardless of age,
+Nerve community a harassment-free experience for everyone, regardless of age,
 body size, visible or invisible disability, ethnicity, sex characteristics,
 gender identity and expression, level of experience, education, socioeconomic
 status, nationality, personal appearance, race, caste, color, religion, or
