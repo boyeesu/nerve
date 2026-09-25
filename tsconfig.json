@@ -35,6 +35,6 @@
     "examples",
     "worker",
     "build",
-    "vite.config.ts"
+    "tests/**/*.ts"
   ]
 }

@@ -1,17 +1,18 @@
 import { cookies } from "next/headers";
 import {
   authConfiguration,
+  authenticateAccessKey,
   issueSessionCookieValue,
   isAuthenticated,
   sessionCookie,
-  verifyAdminToken,
 } from "../../../../lib/auth";
+import {
+  clearLoginFailures,
+  isLoginRateLimited,
+  recordLoginFailure,
+} from "../../../../lib/rate-limit";
 
 export const runtime = "nodejs";
-
-const attempts = new Map<string, { count: number; resetAt: number }>();
-const WINDOW_MS = 15 * 60 * 1000;
-const MAX_ATTEMPTS = 8;
 
 function clientKey(request: Request): string {
   return (
@@ -20,27 +21,6 @@ function clientKey(request: Request): string {
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     "unknown"
   ).slice(0, 128);
-}
-
-function rateLimited(key: string): boolean {
-  const now = Date.now();
-  const current = attempts.get(key);
-  if (!current || current.resetAt <= now) {
-    attempts.set(key, { count: 0, resetAt: now + WINDOW_MS });
-    return false;
-  }
-  return current.count >= MAX_ATTEMPTS;
-}
-
-function recordFailure(key: string) {
-  const current = attempts.get(key);
-  if (current) current.count += 1;
-  if (attempts.size > 10_000) {
-    const now = Date.now();
-    for (const [candidate, value] of attempts) {
-      if (value.resetAt <= now) attempts.delete(candidate);
-    }
-  }
 }
 
 function sameOrigin(request: Request): boolean {
@@ -71,7 +51,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Cross-origin request rejected." }, { status: 403 });
   }
   const key = clientKey(request);
-  if (rateLimited(key)) {
+  if (await isLoginRateLimited(key)) {
     return Response.json(
       { error: "Too many attempts. Try again later." },
       { status: 429, headers: { "retry-after": "900" } },
@@ -85,14 +65,17 @@ export async function POST(request: Request) {
     );
   }
   const body = (await request.json().catch(() => null)) as { token?: unknown } | null;
-  if (!body || typeof body.token !== "string" || !verifyAdminToken(body.token)) {
-    recordFailure(key);
+  const context = body && typeof body.token === "string"
+    ? authenticateAccessKey(body.token)
+    : null;
+  if (!context) {
+    await recordLoginFailure(key);
     return Response.json({ error: "Invalid access key." }, { status: 401 });
   }
-  attempts.delete(key);
+  await clearLoginFailures(key);
   const store = await cookies();
-  store.set(sessionCookie.name, issueSessionCookieValue(), sessionCookie.options);
-  return Response.json({ authenticated: true });
+  store.set(sessionCookie.name, issueSessionCookieValue(context), sessionCookie.options);
+  return Response.json({ authenticated: true, actor: context.actor, role: context.role });
 }
 
 export async function DELETE() {

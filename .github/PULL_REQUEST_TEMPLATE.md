@@ -23,8 +23,9 @@
 - [ ] I added or updated tests for changed behavior.
 - [ ] I updated relevant documentation.
 - [ ] I ran `npm run build`.
-- [ ] I ran `node --test tests/rendered-html.test.mjs`.
+- [ ] I ran `npm test`.
 - [ ] I ran `npm run lint`.
+- [ ] I ran `npm run typecheck`.
+- [ ] I ran `npm run audit`.
 - [ ] I included no credentials, private prompts, agent memory, or customer data.
 - [ ] I described breaking, migration, security, and accessibility impact.
-

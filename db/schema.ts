@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  integer,
   jsonb,
   pgTable,
   text,
@@ -64,6 +65,8 @@ export const actionRequests = pgTable(
     agentId: text("agent_id").notNull(),
     action: text("action").notNull(),
     state: text("state").notNull().default("requested"),
+    attempts: integer("attempts").notNull().default(0),
+    lastError: text("last_error"),
     requestedBy: text("requested_by").notNull(),
     request: jsonb("request").$type<Record<string, unknown>>().notNull().default({}),
     response: jsonb("response").$type<Record<string, unknown>>(),
@@ -90,3 +93,10 @@ export const auditEvents = pgTable(
   },
   (table) => [index("audit_events_created_idx").on(table.createdAt)],
 );
+
+export const rateLimitBuckets = pgTable("rate_limit_buckets", {
+  keyHash: text("key_hash").primaryKey(),
+  attempts: integer("attempts").notNull().default(0),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

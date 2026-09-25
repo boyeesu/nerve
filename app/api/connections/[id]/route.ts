@@ -7,7 +7,7 @@ export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireApiAuth(request);
+  const auth = await requireApiAuth(request, "connections.write");
   if (auth instanceof Response) return auth;
   const { id } = await context.params;
   const deleted = await deleteConnection(id);

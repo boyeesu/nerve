@@ -60,8 +60,10 @@ Run the same checks used by continuous integration:
 ```bash
 npm ci
 npm run build
-node --test tests/rendered-html.test.mjs
+npm test
 npm run lint
+npm run typecheck
+npm run audit
 ```
 
 ## Design principles
@@ -108,4 +110,3 @@ technical material under `docs/`.
 
 By contributing, you agree that your contributions will be licensed under the
 [MIT License](LICENSE).
-

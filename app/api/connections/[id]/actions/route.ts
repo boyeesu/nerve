@@ -1,10 +1,16 @@
 import { randomUUID } from "node:crypto";
 import { runtimeAdapter, type AgentAction } from "../../../../../lib/adapters";
-import { requireApiAuth } from "../../../../../lib/auth";
+import {
+  hasPermission,
+  permissionDenied,
+  requireApiAuth,
+  type NervePermission,
+} from "../../../../../lib/auth";
 import {
   beginAction,
   finishAction,
   getConnection,
+  markActionDispatching,
   toRuntimeConnection,
   writeAudit,
 } from "../../../../../lib/store";
@@ -33,6 +39,14 @@ export async function POST(
   ) {
     return Response.json({ error: "A valid action type and agentId are required." }, { status: 400 });
   }
+
+  const permission: NervePermission =
+    type === "message"
+      ? "actions.message"
+      : type === "stop"
+        ? "actions.stop"
+        : "approvals.write";
+  if (!hasPermission(auth, permission)) return permissionDenied();
   if (idempotencyKey.length > 200) {
     return Response.json({ error: "Idempotency key is too long." }, { status: 400 });
   }
@@ -65,24 +79,60 @@ export async function POST(
 
   const connection = await getConnection(id);
   if (!connection) return Response.json({ error: "Connection not found." }, { status: 404 });
-  const action = { ...body, type, agentId, idempotencyKey } as AgentAction;
+  const persistedRequest: Record<string, unknown> = {
+    type: String(type),
+    agentId,
+    ...(type === "message" ? { input: String(body?.input).trim() } : {}),
+    ...(typeof body?.runId === "string" ? { runId: body.runId.trim() } : {}),
+    ...(typeof body?.sessionId === "string"
+      ? { sessionId: body.sessionId.trim() }
+      : {}),
+    ...(type === "approve" ? { decision: String(body?.decision) } : {}),
+    ...(typeof body?.approvalKind === "string"
+      ? { approvalKind: body.approvalKind }
+      : {}),
+  };
+  const action = { ...persistedRequest, idempotencyKey } as AgentAction;
   const started = await beginAction({
     idempotencyKey,
     connectionId: id,
     agentId,
     action: String(type),
     actor: auth.actor,
-    request: {
-      type: String(type),
-      agentId,
-      runId: typeof body?.runId === "string" ? body.runId : undefined,
-      sessionId: typeof body?.sessionId === "string" ? body.sessionId : undefined,
-    },
+    request: persistedRequest,
   });
   if (!started.fresh) {
+    if (
+      !started.record ||
+      started.record.connectionId !== id ||
+      started.record.agentId !== agentId ||
+      started.record.action !== type ||
+      JSON.stringify(started.record.request) !== JSON.stringify(persistedRequest)
+    ) {
+      return Response.json(
+        { error: "That idempotency key is already bound to another action." },
+        { status: 409 },
+      );
+    }
+    const retryRequested = request.headers.get("x-nerve-retry") === "true";
+    if (
+      retryRequested &&
+      (started.record?.state === "failed" || started.record?.state === "unknown")
+    ) {
+      const retryAccepted = await markActionDispatching(idempotencyKey, true);
+      if (!retryAccepted) {
+        return Response.json({ error: "The action could not be claimed for retry." }, { status: 409 });
+      }
+    } else {
+      return Response.json(
+        { action: started.record, replayed: true },
+        { status: started.record?.state === "completed" ? 200 : 409 },
+      );
+    }
+  } else if (!(await markActionDispatching(idempotencyKey))) {
     return Response.json(
-      { action: started.record, replayed: true },
-      { status: started.record?.state === "completed" ? 200 : 409 },
+      { error: "The action could not be claimed for delivery." },
+      { status: 409 },
     );
   }
 
@@ -103,15 +153,20 @@ export async function POST(
     return Response.json({ idempotencyKey, result });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Agent action failed.";
-    await finishAction(idempotencyKey, "failed", { error: message });
+    const ambiguous = /timed out|timeout|closed the connection|fetch failed|aborted/i.test(message);
+    const state = ambiguous ? "unknown" : "failed";
+    await finishAction(idempotencyKey, state, { error: message });
     await writeAudit({
       actor: auth.actor,
       action: `agent.${type}`,
       targetType: "agent",
       targetId: agentId,
-      outcome: "failed",
+      outcome: state,
       metadata: { connectionId: id, idempotencyKey },
     });
-    return Response.json({ error: message, idempotencyKey }, { status: 502 });
+    return Response.json(
+      { error: message, idempotencyKey, state, retryable: true },
+      { status: ambiguous ? 202 : 502 },
+    );
   }
 }

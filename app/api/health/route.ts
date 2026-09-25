@@ -20,7 +20,7 @@ export async function GET() {
   return Response.json(
     {
       status: ready ? "ok" : "not_ready",
-      version: process.env.NERVE_VERSION ?? "0.1.0",
+      version: process.env.NERVE_VERSION ?? "0.2.0",
       checks: {
         authentication: auth.configured,
         database,
