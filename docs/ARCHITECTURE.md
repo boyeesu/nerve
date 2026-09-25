@@ -3,8 +3,9 @@
 This document describes Nerve's current modular-monolith foundation and its
 target production architecture. The repository implements authenticated
 control APIs, PostgreSQL persistence, encrypted runtime connections, and live
-OpenClaw/Hermes request adapters. Durable event ingestion and multi-tenant
-policy remain roadmap work.
+OpenClaw/Hermes request adapters. Role-scoped authorization and distributed
+unlock rate limiting are implemented. Durable event ingestion and multi-tenant
+isolation remain roadmap work.
 
 ## Goals
 
@@ -118,9 +119,10 @@ approval.
 ### Command bus
 
 The current action ledger persists every command before delivery, enforces
-unique idempotency keys, and records runtime responses. A separate retrying
-worker/queue is planned; request-time delivery does not currently retry
-ambiguous failures.
+unique idempotency keys, records attempts and runtime responses, and preserves
+ambiguous delivery as `unknown`. Operators may explicitly retry a failed or
+unknown action. A separate retrying worker/queue is planned; request-time
+delivery never silently retries ambiguous failures.
 
 ### Live event gateway
 

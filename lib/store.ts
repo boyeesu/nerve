@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   actionRequests,
@@ -82,6 +82,18 @@ export async function createConnection(input: {
     })
     .returning();
   return publicConnection(row);
+}
+
+export async function findConnectionByEndpoint(
+  runtime: RuntimeKind,
+  endpoint: string,
+): Promise<StoredConnection | null> {
+  const [row] = await getDb()
+    .select()
+    .from(connections)
+    .where(and(eq(connections.runtime, runtime), eq(connections.endpoint, endpoint)))
+    .limit(1);
+  return row ? publicConnection(row) : null;
 }
 
 export async function updateConnectionProbe(
@@ -183,13 +195,41 @@ export async function beginAction(input: {
 
 export async function finishAction(
   idempotencyKey: string,
-  state: "completed" | "failed",
+  state: "completed" | "failed" | "unknown",
   response: Record<string, unknown>,
 ) {
   await getDb()
     .update(actionRequests)
-    .set({ state, response, updatedAt: new Date() })
+    .set({
+      state,
+      response,
+      lastError: state === "completed" ? null : String(response.error ?? "Action outcome is unknown."),
+      updatedAt: new Date(),
+    })
     .where(eq(actionRequests.idempotencyKey, idempotencyKey));
+}
+
+export async function markActionDispatching(
+  idempotencyKey: string,
+  allowRetry = false,
+): Promise<boolean> {
+  const allowedStates = allowRetry ? ["failed", "unknown"] : ["requested"];
+  const rows = await getDb()
+    .update(actionRequests)
+    .set({
+      state: "dispatching",
+      attempts: sql`${actionRequests.attempts} + 1`,
+      lastError: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(actionRequests.idempotencyKey, idempotencyKey),
+        inArray(actionRequests.state, allowedStates),
+      ),
+    )
+    .returning({ id: actionRequests.id });
+  return rows.length === 1;
 }
 
 export async function writeAudit(input: {

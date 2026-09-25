@@ -1,0 +1,12 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Generated dependencies, build output, and binary assets"
+paths = [
+  '''(^|/)node_modules/''',
+  '''(^|/)\.next/''',
+  '''(^|/)dist/''',
+  '''(^|/)coverage/''',
+  '''(^|/)public/assets/.*\.(png|jpg|jpeg|webp|gif)$''',
+]

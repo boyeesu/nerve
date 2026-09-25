@@ -157,9 +157,13 @@ async function openClawRpc(
       if (response.id === connectId) {
         if (!response.ok) {
           const details = response.error?.details;
+          const requestId =
+            typeof details?.requestId === "string"
+              ? details.requestId
+              : response.error?.message?.match(/requestId:\s*([a-f0-9-]+)/i)?.[1];
           const reason =
-            details?.code === "PAIRING_REQUIRED"
-              ? "OpenClaw device pairing is required. Approve Nerve in OpenClaw and retry."
+            details?.code === "PAIRING_REQUIRED" || /pairing required/i.test(response.error?.message ?? "")
+              ? `OpenClaw device pairing is required. Approve Nerve in OpenClaw and retry.${requestId ? ` Request ID: ${requestId}.` : ""}`
               : response.error?.message ?? "OpenClaw rejected the connection.";
           finish(new Error(reason));
           return;

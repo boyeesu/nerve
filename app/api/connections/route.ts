@@ -6,7 +6,12 @@ import {
   type RuntimeKind,
 } from "../../../lib/adapters";
 import { assertSafeRuntimeEndpoint } from "../../../lib/network-policy";
-import { createConnection, listConnections, writeAudit } from "../../../lib/store";
+import {
+  createConnection,
+  findConnectionByEndpoint,
+  listConnections,
+  writeAudit,
+} from "../../../lib/store";
 
 export const runtime = "nodejs";
 const OPENCLAW_SCOPES = new Set([
@@ -28,7 +33,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireApiAuth(request);
+  const auth = await requireApiAuth(request, "connections.write");
   if (auth instanceof Response) return auth;
   if (Number(request.headers.get("content-length") ?? 0) > 32_768) {
     return Response.json({ error: "Request is too large." }, { status: 413 });
@@ -59,6 +64,14 @@ export async function POST(request: Request) {
     return Response.json(
       { error: error instanceof Error ? error.message : "Invalid endpoint." },
       { status: 400 },
+    );
+  }
+
+  const existing = await findConnectionByEndpoint(runtime as RuntimeKind, endpoint);
+  if (existing) {
+    return Response.json(
+      { error: "That runtime endpoint is already connected.", connection: existing },
+      { status: 409 },
     );
   }
 

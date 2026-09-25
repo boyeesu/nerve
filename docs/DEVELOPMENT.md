@@ -15,7 +15,7 @@ cd nerve
 npm install
 cp .env.example .env.local
 npm run db:migrate
-npm run dev:next
+npm run dev
 ```
 
 The development server prints its local URL.
@@ -24,27 +24,25 @@ The development server prints its local URL.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Start the OpenAI Sites/Vinext development server |
-| `npm run dev:next` | Start the production-compatible Next.js development server |
+| `npm run dev` | Start the Next.js development server |
+| `npm run dev:next` | Alias for the Next.js development server |
 | `npm run build` | Create the Railway/Node production build |
-| `npm run build:sites` | Create the OpenAI Sites worker build |
 | `npm run test` | Run source and production-contract tests |
 | `npm run lint` | Run ESLint |
-| `npm run db:generate` | Generate database migrations |
+| `npm run typecheck` | Typecheck without emitting files |
+| `npm run audit` | Fail on high-severity production dependency findings |
 | `npm run db:migrate` | Apply checked-in PostgreSQL migrations |
 
 ## Project layout
 
 ```text
 app/                    Product interface and routes
-build/                  Sites/Vite integration
 db/                     Database access and schema
 docs/                   Architecture and contributor documentation
 drizzle/                Database migration metadata
 examples/               Capability examples
 public/                 Public assets
 tests/                  Automated tests
-worker/                 Cloudflare Worker entrypoint
 .github/                CI and contribution templates
 ```
 
@@ -89,14 +87,10 @@ access.
 
 ## Database changes
 
-Edit the schema under `db/`, then generate and inspect migrations:
-
-```bash
-npm run db:generate
-```
-
-Do not edit generated migration history casually. Explain destructive or
-irreversible schema changes in the pull request.
+Edit the schema under `db/`, add the corresponding numbered SQL migration
+under `drizzle/`, and test it against a disposable PostgreSQL database. Do not
+rewrite applied migration history. Explain destructive or irreversible schema
+changes and their rollback procedure in the pull request.
 
 ## Dependency changes
 
@@ -112,6 +106,8 @@ npm ci
 npm run build
 npm test
 npm run lint
+npm run typecheck
+npm run audit
 git status --short
 ```
 

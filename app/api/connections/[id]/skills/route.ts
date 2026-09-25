@@ -39,7 +39,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireApiAuth(request);
+  const auth = await requireApiAuth(request, "skills.write");
   if (auth instanceof Response) return auth;
   if (Number(request.headers.get("content-length") ?? 0) > 16_384) {
     return Response.json({ error: "Request is too large." }, { status: 413 });

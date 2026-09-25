@@ -70,8 +70,13 @@ export function decryptJson<T extends Record<string, unknown>>(envelope: string)
     "aes-256-gcm",
     encryptionKey(),
     Buffer.from(ivEncoded, "base64url"),
+    { authTagLength: 16 },
   );
-  decipher.setAuthTag(Buffer.from(tagEncoded, "base64url"));
+  const tag = Buffer.from(tagEncoded, "base64url");
+  if (tag.length !== 16) {
+    throw new Error("Encrypted credential authentication tag is invalid.");
+  }
+  decipher.setAuthTag(tag);
   const plaintext = Buffer.concat([
     decipher.update(Buffer.from(ciphertextEncoded, "base64url")),
     decipher.final(),

@@ -8,6 +8,8 @@ changes.
 
 ## Unreleased
 
+## 0.2.0 — 2026-09-25
+
 ### Added
 
 - Open-source community documentation and contribution templates
@@ -22,6 +24,24 @@ changes.
   checks
 - Endpoint SSRF policy, pinned dependency install-script policy, and production
   security headers
+- Viewer, operator, and admin access keys with signed role-scoped sessions
+- Distributed unlock rate limiting and duplicate-connection protection
+- OpenClaw WebSocket and Hermes HTTP adapter contract tests
+- Production operations runbook and threat model
+
+### Changed
+
+- Actions now preserve dispatch attempts and ambiguous outcomes for explicit,
+  audited reconciliation
+- The runtime dependency set was reduced to the supported Next.js deployment
+  path and upgraded to patched releases
+- CI now enforces production dependency audit and TypeScript checks
+
+### Security
+
+- AES-GCM decryption requires a full 128-bit authentication tag
+- High-risk connection, approval, and skill mutations require admin permission
+- Action idempotency keys are bound to the original connection and payload
 
 ## 0.1.0 — 2026-08-02
 

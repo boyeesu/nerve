@@ -1,6 +1,6 @@
 {
   "name": "nerve",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "license": "MIT",
   "description": "Open-source visual command center for OpenClaw and Hermes agent fleets.",
@@ -14,9 +14,10 @@
   },
   "overrides": {
     "next": {
-      "postcss": "8.5.25",
-      "sharp": "0.35.3"
-    }
+      "postcss": "8.5.26",
+      "sharp": "0.35.4"
+    },
+    "baseline-browser-mapping": "2.11.26"
   },
   "keywords": [
     "agent-orchestration",
@@ -29,53 +30,44 @@
     "node": ">=22.13.0"
   },
   "scripts": {
-    "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
+    "dev": "next dev",
     "dev:next": "next dev",
     "build": "next build && node scripts/prepare-standalone.mjs",
-    "build:sites": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
     "start": "node .next/standalone/server.js",
     "start:standalone": "node server.js",
     "start:railway": "npm run db:migrate && npm run start:standalone",
-    "test": "node --test tests/*.test.mjs",
+    "test": "node --import tsx --test tests/*.test.mjs tests/*.test.ts",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate",
+    "typecheck": "tsc --noEmit",
+    "audit": "npm audit --omit=dev --audit-level=high",
     "db:migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
-    "drizzle-orm": "0.45.2",
-    "next": "16.2.12",
+    "drizzle-orm": "0.45.3",
+    "next": "16.3.6",
     "postgres": "3.4.9",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "undici": "8.9.0",
-    "ws": "8.21.1"
+    "undici": "8.11.2",
+    "ws": "8.21.3"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "1.50.0",
-    "@tailwindcss/postcss": "4.2.1",
+    "@tailwindcss/postcss": "4.3.3",
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@types/ws": "8.18.1",
-    "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.26",
-    "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
-    "eslint-config-next": "16.2.12",
+    "eslint-config-next": "16.3.6",
     "react-server-dom-webpack": "19.2.8",
-    "tailwindcss": "4.2.1",
-    "typescript": "5.9.3",
-    "vinext": "0.0.50",
-    "vite": "8.2.0",
-    "wrangler": "4.118.0"
+    "tailwindcss": "4.3.3",
+    "tsx": "4.23.15",
+    "typescript": "5.9.3"
   },
   "type": "module",
   "allowScripts": {
-    "esbuild@0.18.20": true,
-    "esbuild@0.25.12": true,
     "esbuild@0.28.1": true,
     "fsevents@2.3.3": true,
-    "unrs-resolver@1.11.1": true,
-    "workerd@1.20260730.1": true
+    "unrs-resolver@1.11.1": true
   }
 }

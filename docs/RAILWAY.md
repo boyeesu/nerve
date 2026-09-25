@@ -22,6 +22,9 @@ migrations, and a readiness endpoint. A complete deployment has two services:
 
 5. Set the results as `NERVE_ENCRYPTION_KEY`,
    `NERVE_SESSION_SECRET`, and `NERVE_ADMIN_TOKEN`, respectively.
+   For multiple named operators, set `NERVE_ACCESS_KEYS` to a JSON array of
+   viewer, operator, and admin keys and retain `NERVE_ADMIN_TOKEN` only as a
+   break-glass credential.
 6. Set `NERVE_PUBLIC_URL` to the HTTPS Railway domain.
 7. Generate a public domain and redeploy.
 8. Open `/api/health`. Do not send traffic until it returns `status: ok`.
@@ -47,14 +50,15 @@ Template variables:
 | `NERVE_ENCRYPTION_KEY` | Required generated secret, 32 bytes |
 | `NERVE_SESSION_SECRET` | Required generated secret, at least 32 characters |
 | `NERVE_ADMIN_TOKEN` | Required generated operator access key |
+| `NERVE_ACCESS_KEYS` | Optional JSON role-scoped operator keys |
 | `NERVE_PUBLIC_URL` | Required user input after domain generation |
 | `NERVE_ALLOW_PRIVATE_NETWORKS` | Default `false` |
 
 Railway marketplace templates are project definitions, not files in a Git
-repository. A maintainer must generate and publish the final template from a
-Railway project after this branch is merged. The repository portion is complete:
-the Dockerfile, health check, migration command, variables, and service wiring
-contract are checked in here.
+repository. The maintained template must be regenerated from the production
+project after releases that change services, variables, health checks, or
+migration behavior. The repository contract is checked in through the
+Dockerfile, `railway.json`, health route, migrations, and this variable table.
 
 ## Connecting local runtimes
 
@@ -72,7 +76,7 @@ link-local and cloud metadata addresses.
 
 - Use separate Railway environments and databases for staging and production.
 - Back up PostgreSQL before applying irreversible migrations.
-- Rotate `NERVE_ADMIN_TOKEN` without changing `NERVE_ENCRYPTION_KEY`.
+- Rotate operator keys without changing `NERVE_ENCRYPTION_KEY`.
 - Rotating `NERVE_ENCRYPTION_KEY` requires an explicit credential
   re-encryption procedure; changing it directly makes saved connections
   unreadable.
@@ -80,6 +84,8 @@ link-local and cloud metadata addresses.
   deployments.
 - Monitor `/api/health`, deployment restarts, database connections, and failed
   audit events.
+- Follow the [operations runbook](OPERATIONS.md), including restore drills and
+  ambiguous-action reconciliation.
 
 Railway references:
 [Next.js with PostgreSQL](https://docs.railway.com/guides/nextjs),

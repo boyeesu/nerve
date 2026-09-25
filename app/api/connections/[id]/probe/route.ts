@@ -13,7 +13,7 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireApiAuth(request);
+  const auth = await requireApiAuth(request, "connections.write");
   if (auth instanceof Response) return auth;
   const { id } = await context.params;
   const connection = await getConnection(id);
@@ -39,7 +39,10 @@ export async function POST(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Connection failed.";
     const status = /pairing is required/i.test(message) ? "pending_pairing" : "offline";
-    await updateConnectionProbe(id, { status });
+    await updateConnectionProbe(id, {
+      status,
+      capabilities: status === "pending_pairing" ? { pairingMessage: message } : undefined,
+    });
     return Response.json({ error: message, status }, { status: 422 });
   }
 }

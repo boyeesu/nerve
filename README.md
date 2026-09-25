@@ -33,9 +33,10 @@
 </p>
 
 > [!IMPORTANT]
-> Nerve is a public-alpha, single-operator control plane. Live Hermes HTTP and
+> Nerve is a public-alpha, self-hosted control plane. Live Hermes HTTP and
 > OpenClaw Gateway adapters, encrypted connections, commands, skill management,
-> PostgreSQL persistence, audit events, and Railway packaging are implemented.
+> role-scoped operator access, PostgreSQL persistence, audit events, and
+> Railway packaging are implemented.
 > Runtime compatibility is not guaranteed until `v1.0`.
 
 ## Why Nerve
@@ -97,7 +98,7 @@ Fill `DATABASE_URL`, `NERVE_ENCRYPTION_KEY`, `NERVE_SESSION_SECRET`, and
 
 ```bash
 npm run db:migrate
-npm run dev:next
+npm run dev
 ```
 
 Open the local URL and unlock Nerve with `NERVE_ADMIN_TOKEN`.
@@ -112,8 +113,10 @@ PostgreSQL service contract, and readiness checks. Follow the
 
 ```bash
 npm run build
-node --test tests/rendered-html.test.mjs
+npm test
 npm run lint
+npm run typecheck
+npm run audit
 ```
 
 ## How it fits together
@@ -149,9 +152,10 @@ runs, events, messages, commands, approvals, and artifacts. Read
 | OpenClaw adapter | Protocol-v4 subset; pairing, agents, commands, skills |
 | Hermes adapter | HTTP API; capabilities, runs, actions, skills |
 | Live event transport | Poll/request foundation; durable streaming planned |
-| Authentication | Single-operator secure session |
-| Tenancy and RBAC | Planned |
-| Policy engine | Runtime approvals supported; central policy planned |
+| Authentication | Signed sessions from independently rotatable access keys |
+| Authorization | Viewer, operator, and admin roles |
+| Tenancy | One trusted deployment boundary; workspaces planned |
+| Policy engine | Role gates plus runtime-native approvals |
 
 No production compatibility promise is made before `v1.0.0`. Breaking changes
 will be documented in [CHANGELOG.md](CHANGELOG.md).
@@ -164,6 +168,8 @@ will be documented in [CHANGELOG.md](CHANGELOG.md).
 | [Adapter contract](docs/ADAPTERS.md) | Runtime-neutral types, events, capabilities, and commands |
 | [Connecting runtimes](docs/CONNECTIONS.md) | OpenClaw/Hermes setup, pairing, scopes, and network access |
 | [Production readiness](docs/PRODUCTION.md) | Implemented controls and remaining stable-release gates |
+| [Operations](docs/OPERATIONS.md) | Monitoring, backup, restore, rotation, and incident runbooks |
+| [Threat model](docs/THREAT_MODEL.md) | Trust boundaries, assets, threats, and mitigations |
 | [Railway deployment](docs/RAILWAY.md) | Docker, PostgreSQL, variables, health checks, and template definition |
 | [Development](docs/DEVELOPMENT.md) | Setup, project layout, testing, and local workflows |
 | [Roadmap](docs/ROADMAP.md) | Milestones from prototype to stable release |
