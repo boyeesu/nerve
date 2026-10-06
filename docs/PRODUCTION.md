@@ -18,25 +18,33 @@ guarantee. Operators should review each control below before exposing Nerve.
 - action persistence, idempotency keys, explicit dispatching/unknown states,
   controlled retries, and append-only audit events;
 - database-backed distributed login rate limiting;
+- atomic concurrent login claims, server-side logout revocation, key/role/workspace
+  rotation invalidation, and application-level workspace scoping;
+- durable background delivery, audit outbox recovery, attempt fencing, and
+  evidence-backed manual reconciliation;
+- persisted missions with confirmed, atomic queueing of up to 25 target commands;
 - least-privilege OpenClaw scopes with admin opt-in;
 - no credential fields in connection list responses or audit metadata;
 - container runs as a non-root user;
 - public readiness endpoint that fails closed when auth, encryption, or
   database configuration is missing;
-- protected GitHub main branch, required CI, code-owner review, signed commits,
-  secret scanning, Dependabot, and CodeQL.
+- checked-in CI, code-owner, Dependabot, and CodeQL configuration; verify hosted
+  branch protection, required checks, signing and scanning settings separately;
 - contract tests for live-shaped OpenClaw WebSocket and Hermes HTTP exchanges;
-- zero known production dependency vulnerabilities at release time.
+- production dependency audit gate; dated scan results in [REVIEW.md](REVIEW.md).
 
 ## Required before a stable release
 
-- a multi-user identity provider and workspace-level isolation;
-- durable event streaming/reconciliation rather than request-time polling;
+- real-runtime compatibility and version/pairing/skill-install checks;
+- hosted identity/ingress verification and backup restoration;
+- a multi-user identity provider, provisioning, and stronger tenant isolation
+  for mutually untrusted customers (beyond application workspace scoping);
+- durable event archival/replay beyond the bounded live preview;
 - an approval policy engine for every high-risk action;
-- a background job queue for long-running fan-out;
+- production load/soak testing of the durable queue and rate limits;
 - independent penetration testing and threat-model review.
 
-Until these items land, use one Nerve deployment per trusted team and data
-boundary. Put an identity-aware proxy or Railway access policy in front of any
+Use one Nerve deployment per trusted team and data boundary. Put an
+identity-aware proxy or Railway access policy in front of any
 internet-facing instance, and follow [Operations](OPERATIONS.md) and the
 [Threat model](THREAT_MODEL.md).

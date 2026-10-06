@@ -1,7 +1,13 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import postgres from "postgres";
+
+// Match the documented local setup without overriding injected production values.
+for (const filename of [".env.local", ".env"]) {
+  if (existsSync(filename)) process.loadEnvFile(filename);
+}
 
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {

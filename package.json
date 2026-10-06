@@ -15,7 +15,7 @@
   "overrides": {
     "next": {
       "postcss": "8.5.26",
-      "sharp": "0.35.4"
+      "sharp": "0.35.5"
     },
     "baseline-browser-mapping": "2.11.26"
   },
@@ -37,6 +37,8 @@
     "start:standalone": "node server.js",
     "start:railway": "npm run db:migrate && npm run start:standalone",
     "test": "node --import tsx --test tests/*.test.mjs tests/*.test.ts",
+    "test:integration": "node scripts/test-integration.mjs",
+    "db:restore-drill": "node scripts/backup-restore-drill.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit",
     "audit": "npm audit --omit=dev --audit-level=high",

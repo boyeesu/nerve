@@ -14,6 +14,7 @@ export const connections = pgTable(
   "connections",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id").notNull().default("default"),
     name: text("name").notNull(),
     runtime: text("runtime", { enum: ["openclaw", "hermes"] }).notNull(),
     endpoint: text("endpoint").notNull(),
@@ -26,7 +27,8 @@ export const connections = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("connections_runtime_endpoint_idx").on(table.runtime, table.endpoint),
+    uniqueIndex("connections_workspace_endpoint_idx").on(table.workspaceId, table.runtime, table.endpoint),
+    index("connections_workspace_idx").on(table.workspaceId),
     index("connections_status_idx").on(table.status),
   ],
 );
@@ -76,6 +78,7 @@ export const actionRequests = pgTable(
   (table) => [
     uniqueIndex("action_requests_idempotency_idx").on(table.idempotencyKey),
     index("action_requests_connection_idx").on(table.connectionId, table.createdAt),
+    index("action_requests_recovery_idx").on(table.state, table.updatedAt),
   ],
 );
 
@@ -99,4 +102,26 @@ export const rateLimitBuckets = pgTable("rate_limit_buckets", {
   attempts: integer("attempts").notNull().default(0),
   resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const revokedSessions = pgTable("revoked_sessions", {
+  digest: text("digest").primaryKey(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+});
+
+export type MissionTarget = { connectionId: string; agentId: string };
+export const missions = pgTable("missions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  workspaceId: text("workspace_id").notNull(),
+  name: text("name").notNull(),
+  description: text("description").notNull().default(""),
+  targets: jsonb("targets").$type<MissionTarget[]>().notNull().default([]),
+  createdBy: text("created_by").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [index("missions_workspace_idx").on(table.workspaceId, table.createdAt)]);
+
+export const auditOutbox = pgTable("audit_outbox", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  event: jsonb("event").$type<Record<string, unknown>>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

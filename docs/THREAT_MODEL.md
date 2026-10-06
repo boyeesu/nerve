@@ -35,7 +35,7 @@ models, and skills remain independently trusted systems.
 | Malicious runtime output | Render as data, never instructions; preserve React escaping and avoid raw HTML |
 | Supply-chain compromise | Locked dependencies, production dependency audit, Dependabot cooldown, CodeQL, signed protected branch |
 | Database loss | Platform backups and documented restore drills |
-| Cross-team data exposure | Not solved inside one deployment; use separate deployments until workspace isolation ships |
+| Cross-team data exposure | Workspace-scoped access keys and all connection/mission/action/observation routes; separate deployments/runtime credentials still required for mutually untrusted teams |
 
 ## Security assumptions
 
@@ -51,8 +51,15 @@ models, and skills remain independently trusted systems.
 
 - Nerve is not a multi-tenant security boundary.
 - Runtime protocol changes may break compatibility before `v1.0`.
-- Request-time runtime delivery cannot guarantee whether a command executed
-  when the connection fails after transmission.
+- Durable delivery cannot guarantee whether a command executed when the
+  connection fails after transmission. Interrupted claims become unknown, never
+  automatically resent; manual reconciliation requires evidence and an audit.
+- Runtime event previews are bounded and not archived. A malicious runtime can
+  provide misleading text/receipts; Nerve does not treat them as authorization.
+- Proxy-supplied IPs are trusted only when explicitly configured; the default
+  shared ingress login bucket prioritizes fail-closed behavior over availability.
+- The development-only `braces` dependency has an upstream unpatched DoS advisory
+  (October 6, 2026). Do not lint attacker-controlled pathological glob patterns.
 - The built-in role model is not a substitute for enterprise identity,
   lifecycle management, or an identity-aware proxy.
 - Independent penetration testing is still required before a stable release.

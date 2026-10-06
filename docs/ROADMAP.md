@@ -36,8 +36,8 @@ and observe live agents and runs.
 
 - [x] Persist request-time commands and enforce idempotency keys
 - [x] Start/message and stop commands for supported adapter surfaces
-- Durable background command bus and ambiguous-failure reconciliation
-- Runtime-native resume where supported
+- [x] Durable background delivery, interrupted-claim recovery, and manual reconciliation
+- Runtime-native resume where supported (current Hermes offers new-run session continuation, not in-place resume)
 - Policy evaluation and approval-required states
 - [x] Action outcomes and audit events
 - Degraded runtime and reconnect handling
@@ -48,13 +48,15 @@ confirmed by runtime events.
 
 ## Phase 3 — Mission operations
 
-- Persisted missions and fleet layout
+- [x] Persisted missions with confirmed fleet command fan-out
+- Persisted fleet layout
 - Agent-to-agent handoff visualization
 - Artifact and report browser
 - Search across agents, runs, and safe summaries
 - Saved views and filters
 - Cost, token, latency, and health analytics
-- Team workspaces and role-based access
+- [x] Workspace-scoped keys and role-based record access
+- Enterprise identity provisioning and stronger tenant boundaries
 
 ## Phase 4 — Ecosystem
 

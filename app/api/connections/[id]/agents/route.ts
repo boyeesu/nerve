@@ -11,8 +11,11 @@ export async function GET(
   const auth = await requireApiAuth(request);
   if (auth instanceof Response) return auth;
   const { id } = await context.params;
-  const connection = await getConnection(id);
+  const connection = await getConnection(id, auth.workspaceId);
   if (!connection) return Response.json({ error: "Connection not found." }, { status: 404 });
+  if (!connection.enabled) {
+    return Response.json({ error: "This connection is disabled." }, { status: 409 });
+  }
   try {
     const agents = await runtimeAdapter(connection.runtime).listAgents(
       toRuntimeConnection(connection),

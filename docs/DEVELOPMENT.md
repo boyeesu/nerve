@@ -28,6 +28,8 @@ The development server prints its local URL.
 | `npm run dev:next` | Alias for the Next.js development server |
 | `npm run build` | Create the Railway/Node production build |
 | `npm run test` | Run source and production-contract tests |
+| `npm run test:integration` | Migrate a disposable local DB, start the built server, and run all integration tests |
+| `npm run db:restore-drill` | Restore into an empty local database and compare application data |
 | `npm run lint` | Run ESLint |
 | `npm run typecheck` | Typecheck without emitting files |
 | `npm run audit` | Fail on high-severity production dependency findings |
@@ -112,3 +114,24 @@ git status --short
 ```
 
 Review [CONTRIBUTING.md](../CONTRIBUTING.md) for the complete checklist.
+
+## Full integration checks
+
+Build first, then set `NERVE_TEST_DATABASE_URL` to a **disposable local**
+PostgreSQL database and run `npm run test:integration`. The runner generates
+fixture keys, migrates the database, starts the production server, enables both
+HTTP and database suites, and stops the server afterward. Tests cover workspace
+boundaries, session revocation, concurrent login limits, mission replay,
+background delivery, interrupted claims, fencing, observation, and audit recovery.
+The database suites insert records and temporarily create an audit-failure
+trigger. Never use a database containing valuable data.
+
+CI provides PostgreSQL and runs this full suite rather than silently skipping it.
+Plain `npm test` skips the two database/server-dependent suites.
+
+Optional browser smoke: set `NERVE_PLAYWRIGHT_MODULE` to the absolute path of an
+installed Playwright `index.mjs`. Optionally set `NERVE_TEST_BROWSER_EXECUTABLE`.
+The integration runner then checks the saved-mission workflow, real fixture
+output, continuation, mobile layout, keyboard dismissal, logout and viewer UI.
+Screenshots go into ignored `outputs/`. Browser tooling is not a production
+dependency.

@@ -175,6 +175,16 @@ button {
   gap: 8px;
 }
 
+.topActions .button.ghost {
+  color: #edf2e9;
+  background: #272e29;
+  border-color: #485149;
+}
+
+.topActions .button.ghost:hover:not(:disabled) {
+  background: #364139;
+}
+
 .runtimeHealth {
   gap: 8px;
   margin-right: 6px;
@@ -1676,8 +1686,7 @@ button {
     padding: 16px;
   }
 
-  .missionActions .collaborators,
-  .missionActions .ghost {
+  .missionActions .collaborators {
     display: none;
   }
 
@@ -1715,3 +1724,185 @@ button {
     animation: none !important;
   }
 }
+
+/* Interactive states remain visible for keyboard users and read-only roles. */
+button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 2px solid #438324;
+  outline-offset: 3px;
+}
+
+.connectionDialog {
+  width: min(430px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: #fbfcfa;
+}
+
+.connectionDialog::backdrop {
+  background: rgba(13, 16, 14, .72);
+  backdrop-filter: blur(8px);
+}
+
+.connectionDialog .connectModal {
+  width: 100%;
+}
+
+.notice button {
+  padding: 4px 8px;
+  color: inherit;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.agentSearch {
+  width: min(180px, 100%);
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+  font: inherit;
+}
+
+.connectionList {
+  display: grid;
+  gap: 6px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  max-height: 130px;
+  overflow: auto;
+}
+
+.mission:has(.connectionList) {
+  grid-template-rows: auto auto auto minmax(360px, 1fr) auto;
+}
+
+.connectionList > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.connectionList button {
+  flex-shrink: 0;
+  padding: 5px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: white;
+  cursor: pointer;
+}
+
+.conversationHint,
+.message.system {
+  color: #626b63;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.message.system p {
+  background: #edf2e9;
+}
+
+.statusDot.unknown,
+.statusLabel.unknown i {
+  background: #8e958f;
+}
+
+.metrics strong,
+.agentIdentity,
+.connectionList span,
+.workspaceSwitcher strong {
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.liveFleet {
+  overflow: auto;
+}
+
+.liveFleet .agentPlane {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(202px, 1fr));
+  gap: 24px;
+  padding: 28px 22px 70px;
+  transform-origin: top left;
+}
+
+.liveFleet .agentCard {
+  position: relative;
+  width: 100%;
+  margin-left: 0;
+}
+
+@media (min-width: 921px) and (max-width: 1180px) {
+  .shell {
+    grid-template-columns: 64px minmax(0, 1fr) 310px;
+  }
+}
+
+@media (max-width: 680px) {
+  .topActions { gap: 6px; }
+  .topActions .button { padding: 0 8px; }
+  .toolbar { flex-wrap: wrap; gap: 8px; height: auto; padding: 10px 16px; }
+  .viewTools, .agentSearch { width: 100%; }
+  .missionHeader { gap: 12px; flex-wrap: wrap; }
+  .missionHeader h1 { font-size: 24px; }
+  .mapViewport { min-height: 420px; overflow: auto; }
+  .agentPlane, .liveFleet .agentPlane {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr;
+    min-width: 0;
+    gap: 24px;
+    padding: 26px 16px;
+    transform: none !important;
+  }
+  .agentPlane .agentCard {
+    position: relative;
+    top: auto !important;
+    left: auto !important;
+    width: 100%;
+    margin-left: 0;
+  }
+  .zoomControls, .mapLabel, .connection { display: none; }
+  .brandTag { display: none; }
+}
+
+/* Operational views keep long runtime output within the inspector on mobile. */
+.operationsDialog { width: min(760px, calc(100vw - 32px)); max-height: 88dvh; overflow-y: auto; border: 1px solid #3d4437; border-radius: 16px; background: #171b15; color: #eef3e8; padding: 24px; }
+.operationsDialog::backdrop { background: #000a; }
+.operationsDialog p, .deliveryPanel p { line-height: 1.5; overflow-wrap: anywhere; }
+.operationsDialog label:not(.targetChoice), .deliveryPanel label { display: grid; gap: 8px; margin: 12px 0; }
+.operationsDialog input:not([type=checkbox]), .operationsDialog textarea, .deliveryPanel textarea, .deliveryPanel select { width: 100%; min-width: 0; background: #22271e; color: #eef3e8; border: 1px solid #626c59; border-radius: 8px; padding: 10px; font: inherit; }
+.operationsDialog textarea, .deliveryPanel textarea { min-height: 96px; resize: vertical; }
+.targetChoice { display: flex; align-items: center; gap: 8px; padding: 8px 0; }
+.operationsDialog fieldset { margin: 16px 0; border: 1px solid #626c59; border-radius: 8px; }
+.savedMissions article { border-top: 1px solid #626c59; margin-top: 20px; padding-top: 16px; }
+.operationButtons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.preserveText { white-space: pre-wrap; }
+.operationsNotice { border-left: 3px solid #b8f555; padding: 12px; background: #252d1f; }
+.deliveryPanel { padding: 18px; border-bottom: 1px solid #374030; min-width: 0; font-size: 12px; }
+.deliveryPanel h4 { margin-top: 20px; }
+.deliveryPanel pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow: auto; font-size: 11px; }
+.deliveryPanel details { margin: 10px 0; }
+.deliveryPanel summary { cursor: pointer; padding: 4px 0; }
+.deliveryReceipt { padding: 12px 0; border-top: 1px solid #626c59; }
+.deliveryReceipt small { display: block; margin-top: 4px; }
+.deliveryReceipt .button { margin: 5px 4px 0 0; }
+.runtimeEvents { max-height: 300px; overflow: auto; }
+@media (max-width: 600px) { .operationsDialog { padding: 16px; } }

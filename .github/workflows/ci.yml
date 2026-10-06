@@ -14,6 +14,19 @@ jobs:
     name: Build, test, and lint
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: nerve-ci-disposable
+          POSTGRES_DB: nerve_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Check out repository
@@ -38,7 +51,9 @@ jobs:
         run: npm run build
 
       - name: Test
-        run: npm test
+        run: npm run test:integration
+        env:
+          NERVE_TEST_DATABASE_URL: postgresql://postgres:nerve-ci-disposable@127.0.0.1:5432/nerve_ci
 
       - name: Lint
         run: npm run lint

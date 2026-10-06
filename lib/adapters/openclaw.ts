@@ -1,7 +1,8 @@
 import WebSocket from "ws";
 import { randomUUID } from "node:crypto";
 import { signOpenClawDevicePayload } from "../crypto";
-import { safeRuntimeLookup } from "../network-policy";
+import { assertSafeRuntimeEndpoint, safeRuntimeLookup } from "../network-policy";
+import { isRecord } from "../runtime-response";
 import type {
   AgentAction,
   ConnectionProbe,
@@ -53,6 +54,7 @@ async function openClawRpc(
   connection: RuntimeConnection,
   method: string,
   params: Record<string, unknown>,
+  timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<{ payload: Record<string, unknown>; hello: Record<string, unknown> }> {
   const credentials = connection.credentials;
   if (!credentials.deviceId || !credentials.publicKey || !credentials.privateKeyPem) {
@@ -64,11 +66,12 @@ async function openClawRpc(
   const scopes = credentials.scopes?.length
     ? credentials.scopes
     : ["operator.read", "operator.write", "operator.approvals"];
+  const endpoint = await assertSafeRuntimeEndpoint(connection.endpoint, "openclaw");
 
   return new Promise((resolve, reject) => {
-    const socket = new WebSocket(connection.endpoint, {
+    const socket = new WebSocket(endpoint, {
       origin: process.env.NERVE_PUBLIC_URL ?? "https://nerve.local",
-      maxPayload: 26_214_400,
+      maxPayload: 1_048_576,
       handshakeTimeout: REQUEST_TIMEOUT_MS,
       lookup: safeRuntimeLookup,
     });
@@ -76,13 +79,14 @@ async function openClawRpc(
     const requestId = randomUUID();
     let hello: Record<string, unknown> = {};
     let finished = false;
-    const timeout = setTimeout(() => finish(new Error("OpenClaw gateway request timed out.")), REQUEST_TIMEOUT_MS);
+    let phase: "challenge" | "connect" | "request" = "challenge";
+    const timeout = setTimeout(() => finish(new Error("OpenClaw gateway request timed out.")), timeoutMs);
 
     function finish(error?: Error, payload?: Record<string, unknown>) {
       if (finished) return;
       finished = true;
       clearTimeout(timeout);
-      socket.close();
+      socket.terminate();
       if (error) reject(error);
       else resolve({ payload: payload ?? {}, hello });
     }
@@ -92,15 +96,19 @@ async function openClawRpc(
       if (!finished) finish(new Error("OpenClaw closed the connection before replying."));
     });
     socket.on("message", (raw) => {
+      if (finished) return;
       let frame: Record<string, unknown>;
       try {
-        frame = JSON.parse(raw.toString()) as Record<string, unknown>;
+        const parsed: unknown = JSON.parse(raw.toString());
+        if (!isRecord(parsed)) throw new Error("Invalid frame");
+        frame = parsed;
       } catch {
         finish(new Error("OpenClaw returned an invalid protocol frame."));
         return;
       }
 
       if (frame.type === "event" && frame.event === "connect.challenge") {
+        if (phase !== "challenge") return;
         const challenge = frame.payload as { nonce?: unknown; ts?: unknown };
         if (
           typeof challenge?.nonce !== "string" ||
@@ -110,7 +118,15 @@ async function openClawRpc(
           finish(new Error("OpenClaw sent an invalid connection challenge."));
           return;
         }
+        phase = "connect";
         const signed = devicePayload(connection, challenge.nonce, challenge.ts, scopes);
+        let signature: string;
+        try {
+          signature = signOpenClawDevicePayload(privateKeyPem, signed);
+        } catch {
+          finish(new Error("OpenClaw device identity could not sign the challenge."));
+          return;
+        }
         socket.send(
           JSON.stringify({
             type: "req",
@@ -142,7 +158,7 @@ async function openClawRpc(
               device: {
                 id: deviceId,
                 publicKey,
-                signature: signOpenClawDevicePayload(privateKeyPem, signed),
+                signature,
                 signedAt: challenge.ts,
                 nonce: challenge.nonce,
               },
@@ -153,14 +169,20 @@ async function openClawRpc(
       }
 
       if (frame.type !== "res") return;
+      if (typeof frame.ok !== "boolean" ||
+        (frame.payload !== undefined && !isRecord(frame.payload)) ||
+        (frame.error !== undefined && !isRecord(frame.error))) {
+        finish(new Error("OpenClaw returned an invalid protocol response."));
+        return;
+      }
       const response = frame as unknown as RpcResponse;
-      if (response.id === connectId) {
+      if (phase === "connect" && response.id === connectId) {
         if (!response.ok) {
           const details = response.error?.details;
           const requestId =
             typeof details?.requestId === "string"
               ? details.requestId
-              : response.error?.message?.match(/requestId:\s*([a-f0-9-]+)/i)?.[1];
+              : String(response.error?.message ?? "").match(/requestId:\s*([a-f0-9-]+)/i)?.[1];
           const reason =
             details?.code === "PAIRING_REQUIRED" || /pairing required/i.test(response.error?.message ?? "")
               ? `OpenClaw device pairing is required. Approve Nerve in OpenClaw and retry.${requestId ? ` Request ID: ${requestId}.` : ""}`
@@ -169,10 +191,11 @@ async function openClawRpc(
           return;
         }
         hello = response.payload ?? {};
+        phase = "request";
         socket.send(JSON.stringify({ type: "req", id: requestId, method, params }));
         return;
       }
-      if (response.id === requestId) {
+      if (phase === "request" && response.id === requestId) {
         if (!response.ok) {
           finish(new Error(response.error?.message ?? `OpenClaw rejected ${method}.`));
           return;
@@ -190,6 +213,13 @@ function arrayFrom(value: unknown, key: string): Array<Record<string, unknown>> 
     if (Array.isArray(nested)) return nested.filter((item) => item && typeof item === "object");
   }
   return [];
+}
+
+export async function openClawHistory(connection: RuntimeConnection, agentId: string, sessionId?: string) {
+  const { payload } = await openClawRpc(connection, "chat.history", {
+    sessionKey: sessionId ?? `agent:${agentId}:main`, agentId, limit: 50, maxChars: 50_000,
+  });
+  return payload;
 }
 
 export const openClawAdapter: RuntimeAdapter = {
@@ -254,7 +284,7 @@ export const openClawAdapter: RuntimeAdapter = {
       slug: skillKey,
       acknowledgeClawHubRisk: false,
       timeoutMs: 30_000,
-    });
+    }, 40_000);
     return payload;
   },
 

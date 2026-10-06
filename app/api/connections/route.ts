@@ -1,3 +1,4 @@
+import { auditSafely } from "../../../lib/audit";
 import { requireApiAuth } from "../../../lib/auth";
 import { createOpenClawDeviceIdentity } from "../../../lib/crypto";
 import {
@@ -6,11 +7,11 @@ import {
   type RuntimeKind,
 } from "../../../lib/adapters";
 import { assertSafeRuntimeEndpoint } from "../../../lib/network-policy";
+import { readJsonObject } from "../../../lib/request-body";
 import {
   createConnection,
   findConnectionByEndpoint,
   listConnections,
-  writeAudit,
 } from "../../../lib/store";
 
 export const runtime = "nodejs";
@@ -29,17 +30,14 @@ function cleanName(value: unknown): string {
 export async function GET(request: Request) {
   const auth = await requireApiAuth(request);
   if (auth instanceof Response) return auth;
-  return Response.json({ connections: await listConnections() });
+  return Response.json({ connections: await listConnections(auth.workspaceId) });
 }
 
 export async function POST(request: Request) {
   const auth = await requireApiAuth(request, "connections.write");
   if (auth instanceof Response) return auth;
-  if (Number(request.headers.get("content-length") ?? 0) > 32_768) {
-    return Response.json({ error: "Request is too large." }, { status: 413 });
-  }
-
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = await readJsonObject(request, 32_768);
+  if (body instanceof Response) return body;
   const runtime = body?.runtime;
   const name = cleanName(body?.name);
   const token = typeof body?.token === "string" ? body.token.trim() : "";
@@ -67,7 +65,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const existing = await findConnectionByEndpoint(runtime as RuntimeKind, endpoint);
+  const existing = await findConnectionByEndpoint(runtime as RuntimeKind, endpoint, auth.workspaceId);
   if (existing) {
     return Response.json(
       { error: "That runtime endpoint is already connected.", connection: existing },
@@ -112,6 +110,7 @@ export async function POST(request: Request) {
 
   try {
     const connection = await createConnection({
+      workspaceId: auth.workspaceId,
       name,
       runtime,
       endpoint,
@@ -119,15 +118,15 @@ export async function POST(request: Request) {
       status,
       capabilities,
     });
-    await writeAudit({
+    const warning = await auditSafely({
       actor: auth.actor,
       action: "connection.create",
       targetType: "connection",
       targetId: connection.id,
       outcome: status,
-      metadata: { runtime, endpoint },
+      metadata: { runtime, endpoint, workspaceId: auth.workspaceId ?? "default" },
     });
-    return Response.json({ connection }, { status: 201 });
+    return Response.json({ connection, warning }, { status: 201 });
   } catch (error) {
     const message =
       error instanceof Error && /unique|duplicate/i.test(error.message)
