@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
+import { MissionsPanel } from "./components/MissionsPanel";
+import { DeliveryPanel } from "./components/DeliveryPanel";
+import { requestJson as api } from "../lib/client-api";
 
-type Status = "working" | "waiting" | "idle" | "done";
+type Status = "working" | "waiting" | "idle" | "done" | "unknown";
 type Runtime = "OpenClaw" | "Hermes";
 
 type Agent = {
@@ -24,6 +27,7 @@ type Agent = {
   connectionId?: string;
   runtimeAgentId?: string;
   live?: boolean;
+  model?: string;
 };
 
 type Connection = {
@@ -32,8 +36,11 @@ type Connection = {
   runtime: "openclaw" | "hermes";
   endpoint: string;
   status: string;
+  enabled?: boolean;
 };
 
+type Session = { workspaceId?: string; configured: boolean; authenticated: boolean; actor?: string; role?: "viewer" | "operator" | "admin" };
+type Message = { from: "user" | "agent" | "system"; text: string };
 type RuntimeSkill = {
   key: string;
   name: string;
@@ -146,6 +153,7 @@ const statusCopy: Record<Status, string> = {
   waiting: "Needs input",
   idle: "Idle",
   done: "Completed",
+  unknown: "Status unknown",
 };
 
 const filters = ["All", "Working", "Needs input", "Completed"] as const;
@@ -159,19 +167,25 @@ export default function Home() {
   const [authState, setAuthState] = useState<"checking" | "locked" | "ready">("checking");
   const [accessKey, setAccessKey] = useState("");
   const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [liveAgents, setLiveAgents] = useState<Agent[]>(agents);
   const [selectedId, setSelectedId] = useState("atlas");
   const [zoom, setZoom] = useState(92);
   const [filter, setFilter] = useState<Filter>("All");
-  const [isPaused, setIsPaused] = useState(false);
+  const [stoppedAgents, setStoppedAgents] = useState<Record<string, boolean>>({});
+  const [pendingAgents, setPendingAgents] = useState<Record<string, boolean>>({});
+  const pendingActions = useRef(new Set<string>());
   const [question, setQuestion] = useState("");
-  const [messages, setMessages] = useState([
-    {
-      from: "agent",
-      text: "I’m mapping seven direct competitors now. The clearest gap is visibility: none of them makes multi-agent work feel spatial or legible.",
-    },
-  ]);
+  const [conversations, setConversations] = useState<Record<string, Message[]>>({});
+  const [search, setSearch] = useState("");
+  const [refreshBusy, setRefreshBusy] = useState(false);
+  const [connectionBusy, setConnectionBusy] = useState<string | null>(null);
+  const refreshSequence = useRef(0);
+  const skillsSequence = useRef(0);
+  const authEpoch = useRef(0);
+  const connectionDialog = useRef<HTMLDialogElement>(null);
   const [showConnect, setShowConnect] = useState(false);
   const [connectForm, setConnectForm] = useState({
     name: "",
@@ -187,9 +201,17 @@ export default function Home() {
   const [skillsBusy, setSkillsBusy] = useState(false);
   const [skillKey, setSkillKey] = useState("");
   const [notice, setNotice] = useState("");
+  const [showMissions, setShowMissions] = useState(false);
+  const [continuationSessions, setContinuationSessions] = useState<Record<string, string>>({});
   const [runIds, setRunIds] = useState<Record<string, string>>({});
 
-  const selected = liveAgents.find((agent) => agent.id === selectedId) ?? liveAgents[0] ?? agents[0];
+  const selected = liveAgents.find((agent) => agent.id === selectedId) ?? liveAgents[0];
+  const isPaused = Boolean(selected && stoppedAgents[selected.id]);
+  const actionBusy = Boolean(selected && pendingAgents[selected.id]);
+  const messages = selected ? conversations[selected.id] ?? [] : [];
+  const canManage = session?.role === "admin";
+  const canCommand = canManage || session?.role === "operator";
+  const demoMode = connections.length === 0;
 
   useEffect(() => {
     void loadSession();
@@ -198,37 +220,68 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    function expireSession() {
+      authEpoch.current += 1;
+      refreshSequence.current += 1;
+      skillsSequence.current += 1;
+      setAuthState("locked");
+      setSession(null);
+      setConnections([]);
+      setLiveAgents([]);
+      setConversations({});
+      pendingActions.current.clear();
+      setPendingAgents({});
+      setRunIds({});
+      setContinuationSessions({});
+      setShowMissions(false);
+      setRuntimeSkills([]);
+      setSkillsBusy(false);
+      setRefreshBusy(false);
+      setConnectionBusy(null);
+      setConnectBusy(false);
+      setConnectError("");
+      setStoppedAgents({});
+      setShowConnect(false);
+      setConnectForm((current) => ({ ...current, token: "" }));
+      setQuestion("");
+      setNotice("");
+      setAuthError("Your session has expired. Unlock Nerve to continue.");
+    }
+    const warn = (event: Event) => setNotice((event as CustomEvent<string>).detail);
+    window.addEventListener("nerve-operation-warning", warn);
+    window.addEventListener("nerve-session-expired", expireSession);
+    return () => {
+      window.removeEventListener("nerve-session-expired", expireSession);
+      window.removeEventListener("nerve-operation-warning", warn);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (showConnect) connectionDialog.current?.showModal();
+  }, [showConnect]);
+
+  useEffect(() => {
+    const controller = new AbortController();
     if (
       authState !== "ready" ||
       inspectorTab !== "skills" ||
-      !selected.connectionId ||
+      !selected?.connectionId ||
       !selected.runtimeAgentId
     ) {
       return;
     }
-    void loadSkills(selected);
+    void loadSkills(selected, controller.signal);
+    return () => { controller.abort(); skillsSequence.current += 1; };
     // Selected primitive fields above are the intended refresh boundary.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState, inspectorTab, selected.id, selected.connectionId, selected.runtimeAgentId]);
-
-  async function api<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(path, {
-      ...init,
-      headers: {
-        ...(init?.body ? { "content-type": "application/json" } : {}),
-        ...init?.headers,
-      },
-    });
-    const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
-    if (!response.ok) throw new Error(payload.error ?? `Request failed (${response.status}).`);
-    return payload;
-  }
+  }, [authState, inspectorTab, selected?.id, selected?.connectionId, selected?.runtimeAgentId]);
 
   async function loadSession() {
     try {
-      const session = await api<{ configured: boolean; authenticated: boolean }>(
+      const session = await api<Session>(
         "/api/auth/session",
       );
+      setSession(session);
       if (!session.configured || !session.authenticated) {
         setAuthState("locked");
         return;
@@ -241,75 +294,127 @@ export default function Home() {
   }
 
   async function unlock() {
+    if (authBusy) return;
+    setAuthBusy(true);
     setAuthError("");
     try {
-      await api("/api/auth/session", {
+      const authenticated = await api<Session>("/api/auth/session", {
         method: "POST",
         body: JSON.stringify({ token: accessKey }),
       });
       setAccessKey("");
+      setSession(authenticated);
       setAuthState("ready");
       await loadConnections();
     } catch (error) {
       setAuthError(error instanceof Error ? error.message : "Could not unlock Nerve.");
+    } finally {
+      setAuthBusy(false);
     }
   }
 
   async function loadConnections() {
-    const payload = await api<{ connections: Connection[] }>("/api/connections");
-    setConnections(payload.connections);
-    const connected = payload.connections.filter((connection) => connection.status === "connected");
-    const results = await Promise.all(
-      connected.map(async (connection) => {
-        try {
-          const result = await api<{
-            agents: Array<{
-              id: string;
-              name: string;
-              role: string;
-              status: Status | "unknown";
-              runtime: "openclaw" | "hermes";
-              model?: string;
-            }>;
-          }>(`/api/connections/${connection.id}/agents`);
-          return result.agents.map((agent, index) => {
-            const seed = `${connection.id}-${agent.id}`
-              .split("")
-              .reduce((total, char) => total + char.charCodeAt(0), 0);
-            return {
-              id: `${connection.id}:${agent.id}`,
-              name: agent.name,
-              initials: agent.name.slice(0, 2).toUpperCase(),
-              role: agent.role,
-              runtime: agent.runtime === "openclaw" ? "OpenClaw" : "Hermes",
-              status: agent.status === "unknown" ? "idle" : agent.status,
-              task: "Ready for a command",
-              detail: `Connected through ${connection.name}. Commands are sent server-to-server.`,
-              progress: 0,
-              x: 8 + ((seed + index * 29) % 68),
-              y: 8 + ((seed * 3 + index * 17) % 58),
-              color: ["#b8f555", "#ff9b78", "#75b9ff", "#b99cff"][seed % 4],
-              elapsed: "LIVE",
-              tokens: "—",
-              connectionId: connection.id,
-              runtimeAgentId: agent.id,
-              live: true,
-            } satisfies Agent;
-          });
-        } catch {
-          return [];
-        }
-      }),
-    );
-    const discovered = results.flat();
-    if (discovered.length > 0) {
-      setLiveAgents(discovered);
-      setSelectedId(discovered[0].id);
+    const sequence = ++refreshSequence.current;
+    setRefreshBusy(true);
+    try {
+      const payload = await api<{ connections: Connection[] }>("/api/connections");
+      if (sequence !== refreshSequence.current) return;
+      setConnections(payload.connections);
+      const connected = payload.connections.filter((connection) =>
+        connection.enabled !== false && ["connected", "degraded"].includes(connection.status));
+      const failed: string[] = [];
+      const failedIds = new Set<string>();
+      const results = await Promise.all(
+        connected.map(async (connection) => {
+          try {
+            const result = await api<{
+              agents: Array<{
+                id: string;
+                name: string;
+                role: string;
+                status: Status | "unknown";
+                runtime: "openclaw" | "hermes";
+                model?: string;
+              }>;
+            }>(`/api/connections/${connection.id}/agents`);
+            return result.agents.map((agent, index) => {
+              const seed = `${connection.id}-${agent.id}`
+                .split("")
+                .reduce((total, char) => total + char.charCodeAt(0), 0);
+              return {
+                id: `${connection.id}:${agent.id}`,
+                name: agent.name,
+                initials: agent.name.slice(0, 2).toUpperCase(),
+                role: agent.role,
+                runtime: agent.runtime === "openclaw" ? "OpenClaw" : "Hermes",
+                status: agent.status,
+                model: agent.model,
+                task: agent.status === "working" ? "Runtime reports active work" : "Send a command to start work",
+                detail: `Connected through ${connection.name}. Commands are sent server-to-server.`,
+                progress: 0,
+                x: 8 + ((seed + index * 29) % 68),
+                y: 8 + ((seed * 3 + index * 17) % 58),
+                color: ["#b8f555", "#ff9b78", "#75b9ff", "#b99cff"][seed % 4],
+                elapsed: "—",
+                tokens: "—",
+                connectionId: connection.id,
+                runtimeAgentId: agent.id,
+                live: true,
+              } satisfies Agent;
+            });
+          } catch {
+            failed.push(connection.name);
+            failedIds.add(connection.id);
+            return [];
+          }
+        }),
+      );
+      const discovered = results.flat();
+      if (sequence !== refreshSequence.current) return;
+      setConnections(payload.connections.map((connection) =>
+        failedIds.has(connection.id) ? { ...connection, status: "error" } : connection));
+      const nextAgents = payload.connections.length ? discovered : agents;
+      setLiveAgents(nextAgents);
+      setSelectedId((current) => nextAgents.some((agent) => agent.id === current) ? current : nextAgents[0]?.id ?? "");
+      if (failed.length) setNotice(`Could not refresh ${failed.join(", ")}. Check the connection and retry.`);
+    } catch (error) {
+      if (sequence !== refreshSequence.current) return;
+      setLiveAgents([]);
+      setNotice(error instanceof Error ? error.message : "Could not refresh connections.");
+    } finally {
+      if (sequence === refreshSequence.current) setRefreshBusy(false);
+    }
+  }
+
+  async function signOut() {
+    try {
+      await api("/api/auth/session", { method: "DELETE" });
+      window.dispatchEvent(new Event("nerve-session-expired"));
+      setAuthError("");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Could not sign out.");
+    }
+  }
+
+  async function retryConnection(connection: Connection) {
+    const epoch = authEpoch.current;
+    setConnectionBusy(connection.id);
+    try {
+      await api(`/api/connections/${connection.id}/probe`, { method: "POST" });
+      if (epoch === authEpoch.current) setNotice(`${connection.name} checked.`);
+    } catch (error) {
+      if (epoch === authEpoch.current) setNotice(error instanceof Error ? error.message : "Connection check failed.");
+    } finally {
+      if (epoch === authEpoch.current) {
+        await loadConnections();
+        if (epoch === authEpoch.current) setConnectionBusy(null);
+      }
     }
   }
 
   async function connectRuntime(event: React.FormEvent) {
     event.preventDefault();
+    const epoch = authEpoch.current;
     setConnectBusy(true);
     setConnectError("");
     try {
@@ -319,6 +424,7 @@ export default function Home() {
         method: "POST",
         body: JSON.stringify({ ...connectForm, scopes }),
       });
+      if (epoch !== authEpoch.current) return;
       setNotice(
         result.connection.status === "pending_pairing"
           ? "Approve the Nerve device in OpenClaw, then retry the connection."
@@ -328,30 +434,37 @@ export default function Home() {
       setConnectForm({ name: "", runtime: "openclaw", endpoint: "", token: "", admin: false });
       await loadConnections();
     } catch (error) {
-      setConnectError(error instanceof Error ? error.message : "Connection failed.");
+      if (epoch === authEpoch.current) setConnectError(error instanceof Error ? error.message : "Connection failed.");
     } finally {
-      setConnectBusy(false);
+      if (epoch === authEpoch.current) setConnectBusy(false);
     }
   }
 
-  async function loadSkills(agent: Agent) {
+  async function loadSkills(agent: Agent, signal?: AbortSignal) {
     if (!agent.connectionId || !agent.runtimeAgentId) return;
+    const sequence = ++skillsSequence.current;
     setSkillsBusy(true);
+    setRuntimeSkills([]);
     try {
       const result = await api<{ skills: RuntimeSkill[] }>(
         `/api/connections/${agent.connectionId}/skills?agentId=${encodeURIComponent(agent.runtimeAgentId)}`,
+        { signal },
       );
-      setRuntimeSkills(result.skills);
+      if (sequence === skillsSequence.current) setRuntimeSkills(result.skills);
     } catch (error) {
+      if (signal?.aborted || sequence !== skillsSequence.current) return;
       setNotice(error instanceof Error ? error.message : "Could not load skills.");
       setRuntimeSkills([]);
     } finally {
-      setSkillsBusy(false);
+      if (sequence === skillsSequence.current) setSkillsBusy(false);
     }
   }
 
   async function addSkill() {
-    if (!selected.connectionId || !selected.runtimeAgentId || !skillKey.trim()) return;
+    if (!canManage || skillsBusy || !selected?.connectionId || !selected.runtimeAgentId || !skillKey.trim()) return;
+    const agent = selected;
+    const epoch = authEpoch.current;
+    const sequence = ++skillsSequence.current;
     setSkillsBusy(true);
     try {
       await api(`/api/connections/${selected.connectionId}/skills`, {
@@ -361,82 +474,96 @@ export default function Home() {
           skillKey: skillKey.trim(),
         }),
       });
-      setNotice(`${skillKey.trim()} added to ${selected.name}.`);
-      setSkillKey("");
-      await loadSkills(selected);
+      if (epoch !== authEpoch.current) return;
+      setNotice(selected.runtime === "Hermes"
+        ? `${skillKey.trim()} assignment recorded in Nerve for ${selected.name}. Hermes configuration was not changed.`
+        : `${skillKey.trim()} added to ${selected.name}.`);
+      if (sequence === skillsSequence.current) setSkillKey("");
+      if (sequence === skillsSequence.current) await loadSkills(agent);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not add skill.");
+      if (epoch === authEpoch.current) setNotice(error instanceof Error ? error.message : "Could not add skill.");
     } finally {
-      setSkillsBusy(false);
+      if (sequence === skillsSequence.current) setSkillsBusy(false);
     }
   }
 
   const visibleAgents = useMemo(() => {
     return liveAgents.filter((agent) => {
+      if (!`${agent.name} ${agent.role} ${agent.runtime}`.toLowerCase().includes(search.toLowerCase().trim())) return false;
       if (filter === "All") return true;
       if (filter === "Working") return agent.status === "working";
       if (filter === "Needs input") return agent.status === "waiting";
       return agent.status === "done";
     });
-  }, [filter, liveAgents]);
+  }, [filter, liveAgents, search]);
 
   async function sendQuestion() {
     const trimmed = question.trim();
-    if (!trimmed) return;
-    setMessages((current) => [
-      ...current,
-      { from: "user", text: trimmed },
-      {
-        from: "agent",
-        text: `Got it. I’ll fold that into the current run and report back here. My next checkpoint is in about ${selected.id === "atlas" ? "4" : "6"} minutes.`,
-      },
-    ]);
+    if (!trimmed || !selected || !canCommand || pendingActions.current.has(selected.id)) return;
+    const agent = selected;
+    const epoch = authEpoch.current;
+    function append(message: Message) {
+      if (epoch !== authEpoch.current) return;
+      setConversations((current) => ({ ...current, [agent.id]: [...(current[agent.id] ?? []), message] }));
+    }
+    append({ from: "user", text: trimmed });
     setQuestion("");
-    if (selected.connectionId && selected.runtimeAgentId) {
+    if (agent.connectionId && agent.runtimeAgentId) {
+      pendingActions.current.add(agent.id);
+      setPendingAgents((current) => ({ ...current, [agent.id]: true }));
       try {
         const response = await api<{
           result?: { run_id?: string; runId?: string };
-        }>(`/api/connections/${selected.connectionId}/actions`, {
+        }>(`/api/connections/${agent.connectionId}/actions`, {
           method: "POST",
           headers: { "idempotency-key": crypto.randomUUID() },
           body: JSON.stringify({
             type: "message",
-            agentId: selected.runtimeAgentId,
+            agentId: agent.runtimeAgentId,
             input: trimmed,
+            ...(continuationSessions[agent.id] ? { sessionId: continuationSessions[agent.id] } : {}),
           }),
         });
+        if (epoch !== authEpoch.current) return;
         const runId = response.result?.run_id ?? response.result?.runId;
-        if (runId) setRunIds((current) => ({ ...current, [selected.id]: runId }));
-        setMessages((current) => [
-          ...current,
-          {
-            from: "agent",
+        if (runId) setRunIds((current) => ({ ...current, [agent.id]: runId }));
+        setStoppedAgents((current) => ({ ...current, [agent.id]: false }));
+        append({
+            from: "system",
             text: runId
-              ? `Run ${runId} started. Nerve will keep this thread attached to the runtime.`
-              : "Command accepted by the runtime.",
-          },
-        ]);
+              ? `Runtime accepted run ${runId}. Runtime output and delivery history update above.`
+              : "Command accepted by the runtime. Inspect runtime output and delivery history above.",
+        });
       } catch (error) {
-        setMessages((current) => [
-          ...current,
-          {
-            from: "agent",
+        append({
+            from: "system",
             text: error instanceof Error ? error.message : "The runtime rejected the command.",
-          },
-        ]);
+        });
+      } finally {
+        if (epoch === authEpoch.current) {
+          pendingActions.current.delete(agent.id);
+          setPendingAgents((current) => ({ ...current, [agent.id]: false }));
+        }
       }
+    } else {
+      append({ from: "system", text: "Demo only — no command was sent. Connect a runtime to start real work." });
     }
   }
 
   async function togglePause() {
-    if (!selected.connectionId || !selected.runtimeAgentId) {
-      setIsPaused((value) => !value);
+    if (!selected || !canCommand || pendingActions.current.has(selected.id)) return;
+    const agent = selected;
+    const epoch = authEpoch.current;
+    if (!agent.connectionId || !agent.runtimeAgentId) {
+      setNotice("Demo only — connect a runtime to stop real work.");
       return;
     }
     if (isPaused) {
       setNotice("Stopped runs cannot be resumed in place. Send a new command to continue.");
       return;
     }
+    pendingActions.current.add(agent.id);
+    setPendingAgents((current) => ({ ...current, [agent.id]: true }));
     try {
       await api(`/api/connections/${selected.connectionId}/actions`, {
         method: "POST",
@@ -447,10 +574,16 @@ export default function Home() {
           runId: runIds[selected.id],
         }),
       });
-      setIsPaused(true);
+      if (epoch !== authEpoch.current) return;
+      setStoppedAgents((current) => ({ ...current, [agent.id]: true }));
       setNotice(`${selected.name} stop requested.`);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Could not stop the run.");
+      if (epoch === authEpoch.current) setNotice(error instanceof Error ? error.message : "Could not stop the run.");
+    } finally {
+      if (epoch === authEpoch.current) {
+        pendingActions.current.delete(agent.id);
+        setPendingAgents((current) => ({ ...current, [agent.id]: false }));
+      }
     }
   }
 
@@ -469,21 +602,22 @@ export default function Home() {
             <Image className="brandLogo large" src="/assets/nerve-logo.png" width={54} height={54} alt="Nerve logo" priority />
             <div className="eyebrow">SECURE CONTROL PLANE</div>
             <h1>{authState === "checking" ? "Checking Nerve…" : "Unlock Nerve"}</h1>
-            <p>Your access key stays in this browser session and is exchanged for an HTTP-only cookie.</p>
+            <p>Your access key is exchanged for an HTTP-only session cookie and cleared from this form.</p>
+            {session?.configured === false && <p className="formError" role="alert">Server setup is incomplete. Configure an access key and session secret before signing in.</p>}
             {authState === "locked" && (
               <>
                 <input
                   type="password"
                   value={accessKey}
                   onChange={(event) => setAccessKey(event.target.value)}
-                  placeholder="NERVE_ADMIN_TOKEN"
+                  placeholder="Your Nerve access key"
                   autoComplete="current-password"
                   name="nerve-admin-access-key"
                   aria-label="Nerve access key"
                   autoFocus
                 />
-                {authError && <div className="formError">{authError}</div>}
-                <button className="button primary" disabled={!accessKey}>Open command center</button>
+                {authError && <div className="formError" role="alert">{authError}</div>}
+                <button className="button primary" disabled={authBusy || !accessKey || session?.configured === false}>{authBusy ? "Unlocking…" : "Open command center"}</button>
               </>
             )}
           </form>
@@ -491,7 +625,13 @@ export default function Home() {
       )}
 
       {showConnect && (
-        <div className="modalBackdrop" role="presentation" onMouseDown={() => setShowConnect(false)}>
+        <dialog
+          ref={connectionDialog}
+          className="connectionDialog"
+          aria-labelledby="connection-title"
+          onCancel={(event) => { event.preventDefault(); if (!connectBusy) connectionDialog.current?.close(); }}
+          onClose={() => { setShowConnect(false); setConnectForm((current) => ({ ...current, token: "" })); }}
+        >
           <form
             className="connectModal"
             autoComplete="off"
@@ -501,15 +641,16 @@ export default function Home() {
             <div className="modalHead">
               <div>
                 <div className="eyebrow">RUNTIME CONNECTION</div>
-                <h2>Connect an agent runtime</h2>
+                <h2 id="connection-title">Connect an agent runtime</h2>
               </div>
-              <button type="button" className="iconButton compact" onClick={() => setShowConnect(false)}>×</button>
+              <button type="button" className="iconButton compact" aria-label="Close connection dialog" disabled={connectBusy} onClick={() => connectionDialog.current?.close()}>×</button>
             </div>
             <label>
               Display name
               <input
                 required
                 maxLength={80}
+                autoFocus
                 value={connectForm.name}
                 onChange={(event) => setConnectForm((current) => ({ ...current, name: event.target.value }))}
                 placeholder="Production OpenClaw"
@@ -567,26 +708,29 @@ export default function Home() {
             <div className="securityNote">
               Nerve validates the endpoint server-side, blocks unsafe network targets by default, and never returns this credential to the browser.
             </div>
-            {connectError && <div className="formError">{connectError}</div>}
+            {connectError && <div className="formError" role="alert">{connectError}</div>}
             <div className="modalActions">
-              <button type="button" className="button ghost" onClick={() => setShowConnect(false)}>Cancel</button>
+              <button type="button" className="button ghost" disabled={connectBusy} onClick={() => connectionDialog.current?.close()}>Cancel</button>
               <button className="button primary" disabled={connectBusy}>
                 {connectBusy ? "Testing…" : "Test & connect"}
               </button>
             </div>
           </form>
-        </div>
+        </dialog>
       )}
 
+      {showMissions && authState === "ready" && <MissionsPanel agents={liveAgents} canCommand={canCommand}
+        actor={session?.actor ?? ""} workspaceId={session?.workspaceId ?? "default"} onClose={() => setShowMissions(false)} />}
+
       {notice && (
-        <button className="notice" onClick={() => setNotice("")} aria-label="Dismiss notification">
-          <span>{notice}</span><b>×</b>
-        </button>
+        <div className="notice" role="status">
+          <span>{notice}</span><button onClick={() => setNotice("")} aria-label="Dismiss notification">×</button>
+        </div>
       )}
 
     <main
       className={`shell ${authState !== "ready" ? "isLocked" : ""}`}
-      inert={showConnect || authState !== "ready" ? true : undefined}
+      inert={showConnect || showMissions || authState !== "ready" ? true : undefined}
     >
       <header className="topbar">
         <div className="brand">
@@ -598,53 +742,49 @@ export default function Home() {
         <div className="workspaceSwitcher">
           <span className="workspaceGlyph">N</span>
           <span>
-            <small>Workspace</small>
-            <strong>Northstar OS</strong>
+            <small>Workspace · {session?.workspaceId ?? "default"}</small>
+            <strong>{session?.actor ?? "Nerve"} · {session?.role ?? "locked"}</strong>
           </span>
           <Icon>⌄</Icon>
         </div>
 
         <div className="topActions">
           <div className="runtimeHealth">
-            <span className={connections.some((connection) => connection.status === "connected") ? "liveDot" : "offlineDot"} />
+            <span className={connections.some((connection) => connection.enabled !== false && connection.status === "connected") ? "liveDot" : "offlineDot"} />
             <span>
               {connections.length
-                ? `${connections.filter((connection) => connection.status === "connected").length} of ${connections.length} runtimes connected`
+                ? `${connections.filter((connection) => connection.enabled !== false && connection.status === "connected").length} of ${connections.length} runtimes connected`
                 : "Demo mode · no runtime connected"}
             </span>
           </div>
-          <button className="connectButton" onClick={() => setShowConnect(true)}>＋ Connect</button>
-          <button className="iconButton" aria-label="Search agents"><Icon>⌕</Icon></button>
-          <button className="iconButton" aria-label="Notifications"><Icon>◌</Icon><i /></button>
-          <button className="avatarButton" aria-label="Account menu">DE</button>
+          <button className="connectButton" disabled={!canManage} title={!canManage ? "Admin access is required" : undefined} onClick={() => setShowConnect(true)}>＋ Connect</button>
+          <button className="button ghost" disabled={refreshBusy} onClick={() => void loadConnections()}>{refreshBusy ? "Refreshing…" : "Refresh"}</button>
+          <button className="button ghost" onClick={() => void signOut()}>Sign out</button>
         </div>
       </header>
 
       <aside className="rail" aria-label="Primary navigation">
         <div className="navGroup">
-          <button className="railButton active" aria-label="Mission control"><Icon>⌘</Icon><span>Control</span></button>
-          <button className="railButton" aria-label="Agents"><Icon>◫</Icon><span>Agents</span></button>
-          <button className="railButton" aria-label="Missions"><Icon>◎</Icon><span>Missions</span></button>
-          <button className="railButton" aria-label="Memory"><Icon>▱</Icon><span>Memory</span></button>
+          <button className="railButton active" aria-label="Mission control" onClick={() => { setFilter("All"); setSearch(""); }}><Icon>⌘</Icon><span>Control</span></button>
+          <button className="railButton" aria-label="Agents" onClick={() => { setFilter("All"); setSearch(""); }}><Icon>◫</Icon><span>Agents</span></button>
+          <button className="railButton" aria-label="Missions" onClick={() => setShowMissions(true)}><Icon>◎</Icon><span>Missions</span></button>
+          <button className="railButton" aria-label="Memory" disabled title="Coming in a future release"><Icon>▱</Icon><span>Memory</span></button>
         </div>
         <div className="navGroup">
-          <button className="railButton" aria-label="Settings"><Icon>⚙</Icon><span>Settings</span></button>
+          <button className="railButton" aria-label="Settings" disabled title="Coming in a future release"><Icon>⚙</Icon><span>Settings</span></button>
         </div>
       </aside>
 
       <section className="mission">
         <div className="missionHeader">
           <div>
-            <div className="eyebrow"><span className="liveDot" /> LIVE MISSION</div>
-            <h1>Launch intelligence <span>/ 02</span></h1>
-            <p>{liveAgents.some((agent) => agent.live) ? "Live agents discovered from your connected runtimes." : "Demo agents show how live OpenClaw and Hermes work will appear."}</p>
+            <div className="eyebrow"><span className={demoMode ? "offlineDot" : "liveDot"} /> {demoMode ? "SAMPLE MISSION" : "RUNTIME FLEET"}</div>
+            <h1>{demoMode ? "Launch intelligence" : "Agent command center"} <span>/ {liveAgents.length}</span></h1>
+            <p>{demoMode ? "Demo agents show how live OpenClaw and Hermes work will appear." : "Refresh to update discovery. Inspect an agent for runtime output, events, and saved delivery receipts."}</p>
           </div>
           <div className="missionActions">
-            <div className="collaborators" aria-label="Mission collaborators">
-              <span>SO</span><span>MA</span><span>+3</span>
-            </div>
-            <button className="button ghost"><Icon>↗</Icon> Share view</button>
-            <button className="button primary" onClick={() => setShowConnect(true)}><Icon>＋</Icon> Connect runtime</button>
+            <button className="button ghost" onClick={() => setShowMissions(true)}>Saved missions</button>
+            <button className="button primary" disabled={!canManage} title={!canManage ? "Admin access is required" : undefined} onClick={() => setShowConnect(true)}><Icon>＋</Icon> Connect runtime</button>
           </div>
         </div>
 
@@ -659,24 +799,35 @@ export default function Home() {
                 onClick={() => setFilter(item)}
               >
                 {item}
-                {item === "Needs input" && <b>1</b>}
+                {item === "Needs input" && <b>{liveAgents.filter((agent) => agent.status === "waiting").length}</b>}
               </button>
             ))}
           </div>
           <div className="viewTools">
-            <button className="toolButton"><Icon>≡</Icon> Activity</button>
-            <button className="toolButton"><Icon>⌗</Icon> Group by mission</button>
-            <button className="iconButton compact" aria-label="More view options"><Icon>•••</Icon></button>
+            <input className="agentSearch" aria-label="Search agents" placeholder="Search agents…" value={search} onChange={(event) => setSearch(event.target.value)} />
           </div>
         </div>
 
-        <div className="mapViewport">
+        {connections.length > 0 && (
+          <div className="connectionList" aria-label="Runtime connections">
+            {connections.map((connection) => (
+              <div key={connection.id}>
+                <span><strong>{connection.name}</strong> · {connection.enabled === false ? "disabled" : connection.status.replaceAll("_", " ")}</span>
+                {canManage && <button disabled={connectionBusy !== null} onClick={() => void retryConnection(connection)}>
+                  {connectionBusy === connection.id ? "Checking…" : connection.status === "pending_pairing" ? "Retry pairing" : "Check connection"}
+                </button>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className={`mapViewport${demoMode ? "" : " liveFleet"}`}>
           <div className="mapGrid" />
           <div className="mapGlow glowOne" />
           <div className="mapGlow glowTwo" />
-          <div className="connection connectionOne" />
+          {demoMode && <><div className="connection connectionOne" />
           <div className="connection connectionTwo" />
-          <div className="connection connectionThree" />
+          <div className="connection connectionThree" /></>}
 
           <div
             className="agentPlane"
@@ -685,19 +836,16 @@ export default function Home() {
             {visibleAgents.map((agent) => (
               <button
                 key={agent.id}
-                className={`agentCard ${selected.id === agent.id ? "selected" : ""} status-${agent.status}`}
-                style={{ left: `${agent.x}%`, top: `${agent.y}%` }}
+                className={`agentCard ${selected?.id === agent.id ? "selected" : ""} status-${agent.status}`}
+                style={demoMode ? { left: `${agent.x}%`, top: `${agent.y}%` } : undefined}
                 onClick={() => {
                   setSelectedId(agent.id);
-                  setIsPaused(false);
                   setInspectorTab("activity");
+                  skillsSequence.current += 1;
+                  setSkillsBusy(false);
                   setRuntimeSkills([]);
-                  setMessages([
-                    {
-                      from: "agent",
-                      text: `${agent.detail} Ask me anything about this run.`,
-                    },
-                  ]);
+                  setQuestion("");
+                  setSkillKey("");
                 }}
                 aria-label={`Inspect ${agent.name}, ${statusCopy[agent.status]}`}
               >
@@ -717,7 +865,7 @@ export default function Home() {
                 <div className="agentTask">{agent.task}</div>
                 <div className="agentProgress">
                   <span><i style={{ width: `${agent.progress}%` }} /></span>
-                  <b>{agent.progress ? `${agent.progress}%` : "READY"}</b>
+                  <b>{agent.live ? "—" : agent.progress ? `${agent.progress}%` : "READY"}</b>
                 </div>
                 <div className="agentMeta">
                   <span className={`statusLabel ${agent.status}`}><i />{statusCopy[agent.status]}</span>
@@ -728,11 +876,11 @@ export default function Home() {
           </div>
 
           {visibleAgents.length === 0 && (
-            <div className="emptyState">No agents match this view.</div>
+            <div className="emptyState">{refreshBusy ? "Refreshing runtime agents…" : liveAgents.length ? "No agents match this view." : "No agents available. Check your runtime connections and refresh."}</div>
           )}
 
-          <div className="mapLabel researchLabel"><span>01</span> DISCOVERY</div>
-          <div className="mapLabel buildLabel"><span>02</span> BUILD</div>
+          {demoMode && <><div className="mapLabel researchLabel"><span>01</span> DISCOVERY</div>
+          <div className="mapLabel buildLabel"><span>02</span> BUILD</div></>}
 
           <div className="zoomControls" aria-label="Canvas zoom controls">
             <button onClick={() => setZoom((value) => Math.min(120, value + 8))} aria-label="Zoom in">＋</button>
@@ -748,26 +896,25 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="commandBar">
+        <form className="commandBar" onSubmit={(event) => { event.preventDefault(); void sendQuestion(); }}>
           <span className="commandSpark">✦</span>
           <input
-            aria-label="Command all agents"
-            placeholder="Ask all agents, assign work, or type / for commands…"
+            aria-label="Command selected agent"
+            value={question}
+            maxLength={65_536}
+            disabled={!selected || !canCommand || actionBusy}
+            onChange={(event) => setQuestion(event.target.value)}
+            placeholder={!canCommand ? "Read-only access" : selected ? `Send a command to ${selected.name}…` : "Select an agent to send a command"}
           />
-          <kbd>⌘ K</kbd>
-          <button aria-label="Send command">↵</button>
-        </div>
+          <button disabled={!selected || !canCommand || actionBusy || !question.trim()} aria-label="Send command">↵</button>
+        </form>
       </section>
 
-      <aside className="inspector" aria-label={`${selected.name} details`}>
+      {selected ? <aside className="inspector" aria-label={`${selected.name} details`}>
         <div className="inspectorHead">
           <div>
             <div className="eyebrow">AGENT / {selected.runtime.toUpperCase()}</div>
             <h2>{selected.name}</h2>
-          </div>
-          <div className="inspectorHeadActions">
-            <button className="iconButton compact" aria-label="Open agent in new view">↗</button>
-            <button className="iconButton compact" aria-label="Close agent panel">×</button>
           </div>
         </div>
 
@@ -777,13 +924,15 @@ export default function Home() {
           </span>
           <span>
             <strong>{selected.role}</strong>
-            <small><i className={`statusDot ${selected.status}`} /> {isPaused ? "Paused by you" : statusCopy[selected.status]} · {selected.elapsed}</small>
+            <small><i className={`statusDot ${selected.status}`} /> {isPaused ? "Stop requested" : statusCopy[selected.status]} · {selected.elapsed}</small>
           </span>
           <button
             className={`pauseButton ${isPaused ? "resume" : ""}`}
+            disabled={!canCommand || !selected.live || actionBusy || isPaused || (selected.runtime === "Hermes" && !runIds[selected.id])}
+            title={selected.runtime === "Hermes" && !runIds[selected.id] ? "Start a run here to obtain a run ID before stopping it" : undefined}
             onClick={() => void togglePause()}
           >
-            {isPaused ? "■ Stopped" : "Ⅱ Stop"}
+            {actionBusy ? "…" : isPaused ? "■ Requested" : "■ Stop"}
           </button>
         </div>
 
@@ -812,24 +961,32 @@ export default function Home() {
           <div className="runSection">
             <div className="sectionTitle">
               <span>CURRENT RUN</span>
-              <button>View trace ↗</button>
+              <span>{selected.live ? "Runtime snapshot" : "Sample data"}</span>
             </div>
             <h3>{selected.task}</h3>
             <p>{selected.detail}</p>
-            <div className="runProgress">
+            {!selected.live && <div className="runProgress">
               <div><span style={{ width: `${isPaused ? Math.max(selected.progress - 4, 0) : selected.progress}%` }} /></div>
               <b>{selected.progress}%</b>
-            </div>
+            </div>}
           </div>
 
           <div className="metrics">
             <div><small>ELAPSED</small><strong>{selected.elapsed}</strong></div>
             <div><small>TOKENS</small><strong>{selected.tokens}</strong></div>
-            <div><small>MODEL</small><strong>{selected.runtime === "OpenClaw" ? "Sonnet 4" : "GPT-5"}</strong></div>
+            <div><small>MODEL</small><strong>{selected.live ? selected.model || "Not reported" : "Sample model"}</strong></div>
           </div>
 
-          <div className="timeline">
-            <div className="sectionTitle"><span>LIVE ACTIVITY</span><i className="liveDot" /></div>
+          {selected.live && selected.connectionId && selected.runtimeAgentId ? <DeliveryPanel
+            key={`${authEpoch.current}:${selected.id}`}
+            connectionId={selected.connectionId} agentId={selected.runtimeAgentId} runtime={selected.runtime}
+            canManage={canManage} canCommand={canCommand}
+            onContinue={(sessionId) => {
+              setContinuationSessions((values) => ({ ...values, [selected.id]: sessionId }));
+              setNotice("Your next command will start a new run in this session. This does not resume the stopped run.");
+            }}
+          /> : <div className="timeline">
+            <div className="sectionTitle"><span>SAMPLE ACTIVITY</span></div>
             <div className="timelineItem complete">
               <i>✓</i>
               <div><strong>Plan established</strong><small>Identified 4 workstreams and success criteria</small></div>
@@ -850,11 +1007,13 @@ export default function Home() {
               <div><strong>Draft final brief</strong><small>Build recommendation with source links</small></div>
               <time>~6m</time>
             </div>
-          </div>
+          </div>}
 
           <div className="conversation">
-            <div className="sectionTitle"><span>ASK {selected.name.toUpperCase()}</span><button>Clear</button></div>
-            <div className="messages">
+            <div className="sectionTitle"><span>ASK {selected.name.toUpperCase()}</span><button disabled={actionBusy} onClick={() => setConversations((current) => ({ ...current, [selected.id]: [] }))}>Clear</button></div>
+            {continuationSessions[selected.id] && <p className="conversationHint">Continuing session {continuationSessions[selected.id]} <button className="button ghost" onClick={() => setContinuationSessions((values) => { const next = { ...values }; delete next[selected.id]; return next; })}>Use a new session</button></p>}
+            <div className="messages" role="log" aria-label={`${selected.name} command history`}>
+              {messages.length === 0 && <p className="conversationHint">{selected.live ? "Send a command to the runtime. Saved receipts and runtime output appear above." : "Sample agent — commands are not sent to a runtime."}</p>}
               {messages.map((message, index) => (
                 <div key={`${message.from}-${index}`} className={`message ${message.from}`}>
                   {message.from === "agent" && <span>{selected.initials}</span>}
@@ -865,20 +1024,22 @@ export default function Home() {
             <div className="askBox">
               <textarea
                 value={question}
+                maxLength={65_536}
+                disabled={!canCommand || actionBusy}
                 onChange={(event) => setQuestion(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" && !event.shiftKey) {
+                  if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
                     event.preventDefault();
-                    sendQuestion();
+                    void sendQuestion();
                   }
                 }}
-                placeholder={`Ask ${selected.name} about this run…`}
+                placeholder={canCommand ? `Send ${selected.name} a command…` : "Read-only access"}
                 aria-label={`Ask ${selected.name} a question`}
               />
               <div>
-                <button className="attachButton" aria-label="Attach context">＋</button>
+                <span>{actionBusy ? "Sending…" : selected.live ? "Runtime command" : "Demo only"}</span>
                 <span>↵ to send</span>
-                <button className="sendButton" onClick={sendQuestion} disabled={!question.trim()} aria-label="Send question">↑</button>
+                <button className="sendButton" onClick={() => void sendQuestion()} disabled={!canCommand || actionBusy || !question.trim()} aria-label="Send question">↑</button>
               </div>
             </div>
           </div>
@@ -892,7 +1053,7 @@ export default function Home() {
                   <p>
                     {selected.runtime === "OpenClaw"
                       ? "Install a reviewed ClawHub skill into this agent workspace. OpenClaw enforces its own security policy."
-                      : "Hermes exposes installed skills read-only. Nerve can assign one to this agent; install new skills in Hermes first."}
+                      : "Hermes exposes installed skills read-only. Track an assignment in Nerve; this does not install or activate a skill in Hermes."}
                   </p>
                 </div>
               </div>
@@ -901,11 +1062,13 @@ export default function Home() {
                   <div className="skillAdd">
                     <input
                       value={skillKey}
+                      disabled={!canManage || skillsBusy}
+                      maxLength={256}
                       onChange={(event) => setSkillKey(event.target.value)}
                       placeholder={selected.runtime === "OpenClaw" ? "ClawHub skill slug" : "Installed Hermes skill name"}
                       aria-label="Skill key"
                     />
-                    <button className="button primary" onClick={() => void addSkill()} disabled={skillsBusy || !skillKey.trim()}>
+                    <button className="button primary" onClick={() => void addSkill()} disabled={!canManage || skillsBusy || !skillKey.trim()}>
                       {skillsBusy ? "Working…" : selected.runtime === "OpenClaw" ? "Install" : "Assign"}
                     </button>
                   </div>
@@ -932,7 +1095,7 @@ export default function Home() {
             </div>
           )}
         </div>
-      </aside>
+      </aside> : <aside className="inspector"><div className="emptySkill">Select an available agent to inspect its runtime and send commands.</div></aside>}
     </main>
     </>
   );

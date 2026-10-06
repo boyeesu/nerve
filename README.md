@@ -62,17 +62,27 @@ calm, observable, and safe.
 - Server-side Hermes API connection, capabilities, runs, stop, and approvals
 - Working, waiting, completed, and idle states
 - Agent filtering and canvas zoom
-- Run inspection with progress, trace, model, token, and timing data
+- Hermes run status, live reply/tool events, and bounded OpenClaw session history
 - Direct commands and stop controls with idempotency records
 - Direct operator-to-agent questions that start runtime-native work
 - OpenClaw ClawHub skill installation per agent
 - Hermes installed-skill discovery and Nerve-side assignment
 - Encrypted credentials, authenticated APIs, endpoint SSRF policy, and audits
 - PostgreSQL migrations and production health checks
-- Fleet-wide command bar
+- Selected-agent command bar with delivery receipts
+- Saved workspace missions with confirmed, durable fan-out to up to 25 targets
+- Crash recovery, saved delivery history, and audited manual reconciliation
+- Workspace-scoped access keys, key-rotation invalidation, and logout revocation
 - Responsive layouts for desktop and smaller screens
 
-The dashboard falls back to sample agents until a live runtime is connected.
+The dashboard shows clearly labeled sample agents only when no connections are
+saved. Live views show runtime-reported data, not simulated replies or traces.
+Use Refresh to update discovery and Check connection / Retry pairing to
+re-probe a runtime. Hermes events and run status depend on runtime version;
+OpenClaw history is polled. Event previews are not a durable trace archive.
+“Continue in this session” starts a new Hermes run; it does not resume an
+interrupted run in place. The background worker requires a long-lived Node
+process. See [the review](docs/REVIEW.md) for verification and remaining gates.
 See [Connecting runtimes](docs/CONNECTIONS.md) for supported APIs and network
 requirements.
 

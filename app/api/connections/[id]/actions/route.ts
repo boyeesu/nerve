@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { runtimeAdapter, type AgentAction } from "../../../../../lib/adapters";
+import { canRetryAction, sameActionRequest } from "../../../../../lib/action-policy";
+import { readJsonObject } from "../../../../../lib/request-body";
+import { deliverAction } from "../../../../../lib/action-delivery";
+import { workerEnabled } from "../../../../../lib/recovery";
+import { and, desc, eq } from "drizzle-orm";
+import { getDb } from "../../../../../db";
+import { actionRequests } from "../../../../../db/schema";
 import {
   hasPermission,
   permissionDenied,
@@ -8,11 +14,8 @@ import {
 } from "../../../../../lib/auth";
 import {
   beginAction,
-  finishAction,
   getConnection,
   markActionDispatching,
-  toRuntimeConnection,
-  writeAudit,
 } from "../../../../../lib/store";
 
 export const runtime = "nodejs";
@@ -23,11 +26,9 @@ export async function POST(
 ) {
   const auth = await requireApiAuth(request);
   if (auth instanceof Response) return auth;
-  if (Number(request.headers.get("content-length") ?? 0) > 131_072) {
-    return Response.json({ error: "Request is too large." }, { status: 413 });
-  }
   const { id } = await context.params;
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = await readJsonObject(request, 131_072);
+  if (body instanceof Response) return body;
   const type = body?.type;
   const agentId = typeof body?.agentId === "string" ? body.agentId.trim() : "";
   const suppliedKey = request.headers.get("idempotency-key")?.trim();
@@ -76,9 +77,25 @@ export async function POST(
   ) {
     return Response.json({ error: "Invalid approvalKind." }, { status: 400 });
   }
+  for (const field of ["runId", "sessionId"] as const) {
+    if (body[field] !== undefined &&
+      (typeof body[field] !== "string" || !body[field].trim() || body[field].length > 256)) {
+      return Response.json({ error: `A valid ${field} is required.` }, { status: 400 });
+    }
+  }
 
-  const connection = await getConnection(id);
+  const connection = await getConnection(id, auth.workspaceId);
   if (!connection) return Response.json({ error: "Connection not found." }, { status: 404 });
+  if (!connection.enabled) {
+    return Response.json({ error: "This connection is disabled." }, { status: 409 });
+  }
+  if (connection.runtime === "hermes" && type === "stop" && !body.runId) {
+    return Response.json({ error: "A Hermes run ID is required to stop a run." }, { status: 400 });
+  }
+  if (connection.runtime === "openclaw" && type === "approve" && !body.approvalKind) {
+    return Response.json({ error: "OpenClaw approvalKind is required." }, { status: 400 });
+  }
+  const retryable = canRetryAction(connection.runtime, String(type));
   const persistedRequest: Record<string, unknown> = {
     type: String(type),
     agentId,
@@ -92,7 +109,9 @@ export async function POST(
       ? { approvalKind: body.approvalKind }
       : {}),
   };
-  const action = { ...persistedRequest, idempotencyKey } as AgentAction;
+  const asyncDelivery = request.headers.get("prefer") === "respond-async";
+  if (asyncDelivery && !workerEnabled()) return Response.json({ error: "Background delivery is disabled." }, { status: 503 });
+  let claim;
   const started = await beginAction({
     idempotencyKey,
     connectionId: id,
@@ -107,7 +126,8 @@ export async function POST(
       started.record.connectionId !== id ||
       started.record.agentId !== agentId ||
       started.record.action !== type ||
-      JSON.stringify(started.record.request) !== JSON.stringify(persistedRequest)
+      started.record.requestedBy !== auth.actor ||
+      !sameActionRequest(started.record.request, persistedRequest)
     ) {
       return Response.json(
         { error: "That idempotency key is already bound to another action." },
@@ -119,54 +139,46 @@ export async function POST(
       retryRequested &&
       (started.record?.state === "failed" || started.record?.state === "unknown")
     ) {
-      const retryAccepted = await markActionDispatching(idempotencyKey, true);
-      if (!retryAccepted) {
+      if (!retryable) {
+        return Response.json(
+          { error: "This runtime action cannot be safely retried. Check the runtime before starting new work.", retryable: false },
+          { status: 409 },
+        );
+      }
+      claim = await markActionDispatching(idempotencyKey, true);
+      if (!claim) {
         return Response.json({ error: "The action could not be claimed for retry." }, { status: 409 });
       }
     } else {
       return Response.json(
-        { action: started.record, replayed: true },
+        {
+          idempotencyKey,
+          action: started.record,
+          result: started.record.state === "completed" ? started.record.response : undefined,
+          error: started.record.state === "completed" ? undefined : "This action is not complete. Check its status before retrying.",
+          replayed: true,
+          retryable,
+        },
         { status: started.record?.state === "completed" ? 200 : 409 },
       );
     }
-  } else if (!(await markActionDispatching(idempotencyKey))) {
-    return Response.json(
-      { error: "The action could not be claimed for delivery." },
-      { status: 409 },
-    );
+  } else {
+    if (asyncDelivery) return Response.json({ idempotencyKey, state: "requested", queued: true }, { status: 202 });
+    claim = await markActionDispatching(idempotencyKey);
+    if (!claim) return Response.json({ error: "The action was claimed by the recovery worker. Check delivery history.", idempotencyKey }, { status: 409 });
   }
+  const delivered = await deliverAction(claim!, auth.workspaceId ?? "default");
+  return Response.json(delivered.payload, { status: delivered.status });
+}
 
-  try {
-    const result = await runtimeAdapter(connection.runtime).act(
-      toRuntimeConnection(connection),
-      action,
-    );
-    await finishAction(idempotencyKey, "completed", result);
-    await writeAudit({
-      actor: auth.actor,
-      action: `agent.${type}`,
-      targetType: "agent",
-      targetId: agentId,
-      outcome: "completed",
-      metadata: { connectionId: id, idempotencyKey },
-    });
-    return Response.json({ idempotencyKey, result });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Agent action failed.";
-    const ambiguous = /timed out|timeout|closed the connection|fetch failed|aborted/i.test(message);
-    const state = ambiguous ? "unknown" : "failed";
-    await finishAction(idempotencyKey, state, { error: message });
-    await writeAudit({
-      actor: auth.actor,
-      action: `agent.${type}`,
-      targetType: "agent",
-      targetId: agentId,
-      outcome: state,
-      metadata: { connectionId: id, idempotencyKey },
-    });
-    return Response.json(
-      { error: message, idempotencyKey, state, retryable: true },
-      { status: ambiguous ? 202 : 502 },
-    );
-  }
+export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+  const auth = await requireApiAuth(request);
+  if (auth instanceof Response) return auth;
+  const { id } = await context.params;
+  if (!(await getConnection(id, auth.workspaceId))) return Response.json({ error: "Connection not found." }, { status: 404 });
+  const agentId = new URL(request.url).searchParams.get("agentId");
+  const actions = await getDb().select().from(actionRequests).where(and(
+    eq(actionRequests.connectionId, id), agentId ? eq(actionRequests.agentId, agentId) : undefined,
+  )).orderBy(desc(actionRequests.createdAt)).limit(50);
+  return Response.json({ actions });
 }

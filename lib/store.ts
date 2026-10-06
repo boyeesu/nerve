@@ -12,6 +12,7 @@ import type { RuntimeConnection, RuntimeCredentials, RuntimeKind } from "./adapt
 export type StoredConnection = {
   id: string;
   name: string;
+  workspaceId: string;
   runtime: RuntimeKind;
   endpoint: string;
   status: string;
@@ -28,6 +29,7 @@ function publicConnection(
   return {
     id: row.id,
     name: row.name,
+    workspaceId: row.workspaceId,
     runtime: row.runtime,
     endpoint: row.endpoint,
     status: row.status,
@@ -39,18 +41,20 @@ function publicConnection(
   };
 }
 
-export async function listConnections(): Promise<StoredConnection[]> {
-  const rows = await getDb().select().from(connections).orderBy(desc(connections.createdAt));
+export async function listConnections(workspaceId = "default"): Promise<StoredConnection[]> {
+  const rows = await getDb().select().from(connections).where(eq(connections.workspaceId, workspaceId)).orderBy(desc(connections.createdAt));
   return rows.map(publicConnection);
 }
 
 export async function getConnection(
   id: string,
+  workspaceId = "default",
 ): Promise<(StoredConnection & { credentials: RuntimeCredentials }) | null> {
+  if (!isConnectionId(id)) return null;
   const [row] = await getDb()
     .select()
     .from(connections)
-    .where(eq(connections.id, id))
+    .where(and(eq(connections.id, id), eq(connections.workspaceId, workspaceId)))
     .limit(1);
   if (!row) return null;
   return {
@@ -62,6 +66,7 @@ export async function getConnection(
 }
 
 export async function createConnection(input: {
+  workspaceId?: string;
   name: string;
   runtime: RuntimeKind;
   endpoint: string;
@@ -73,6 +78,7 @@ export async function createConnection(input: {
     .insert(connections)
     .values({
       name: input.name,
+      workspaceId: input.workspaceId ?? "default",
       runtime: input.runtime,
       endpoint: input.endpoint,
       encryptedCredentials: encryptJson(input.credentials),
@@ -87,11 +93,12 @@ export async function createConnection(input: {
 export async function findConnectionByEndpoint(
   runtime: RuntimeKind,
   endpoint: string,
+  workspaceId = "default",
 ): Promise<StoredConnection | null> {
   const [row] = await getDb()
     .select()
     .from(connections)
-    .where(and(eq(connections.runtime, runtime), eq(connections.endpoint, endpoint)))
+    .where(and(eq(connections.workspaceId, workspaceId), eq(connections.runtime, runtime), eq(connections.endpoint, endpoint)))
     .limit(1);
   return row ? publicConnection(row) : null;
 }
@@ -118,12 +125,17 @@ export async function updateConnectionProbe(
     .where(eq(connections.id, id));
 }
 
-export async function deleteConnection(id: string): Promise<boolean> {
+export async function deleteConnection(id: string, workspaceId = "default"): Promise<boolean> {
+  if (!isConnectionId(id)) return false;
   const rows = await getDb()
     .delete(connections)
-    .where(eq(connections.id, id))
+    .where(and(eq(connections.id, id), eq(connections.workspaceId, workspaceId)))
     .returning({ id: connections.id });
   return rows.length > 0;
+}
+
+function isConnectionId(id: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
 export async function listSkillAssignments(connectionId: string, agentId: string) {
@@ -197,8 +209,9 @@ export async function finishAction(
   idempotencyKey: string,
   state: "completed" | "failed" | "unknown",
   response: Record<string, unknown>,
+  attempt: number,
 ) {
-  await getDb()
+  const rows = await getDb()
     .update(actionRequests)
     .set({
       state,
@@ -206,13 +219,18 @@ export async function finishAction(
       lastError: state === "completed" ? null : String(response.error ?? "Action outcome is unknown."),
       updatedAt: new Date(),
     })
-    .where(eq(actionRequests.idempotencyKey, idempotencyKey));
+    .where(and(
+      eq(actionRequests.idempotencyKey, idempotencyKey),
+      eq(actionRequests.state, "dispatching"),
+      eq(actionRequests.attempts, attempt),
+    )).returning({ id: actionRequests.id });
+  return rows.length === 1;
 }
 
 export async function markActionDispatching(
   idempotencyKey: string,
   allowRetry = false,
-): Promise<boolean> {
+) {
   const allowedStates = allowRetry ? ["failed", "unknown"] : ["requested"];
   const rows = await getDb()
     .update(actionRequests)
@@ -228,8 +246,8 @@ export async function markActionDispatching(
         inArray(actionRequests.state, allowedStates),
       ),
     )
-    .returning({ id: actionRequests.id });
-  return rows.length === 1;
+    .returning();
+  return rows[0] ?? null;
 }
 
 export async function writeAudit(input: {

@@ -1,11 +1,12 @@
+import { auditSafely } from "../../../../../lib/audit";
 import { runtimeAdapter } from "../../../../../lib/adapters";
 import { requireApiAuth } from "../../../../../lib/auth";
+import { readJsonObject } from "../../../../../lib/request-body";
 import {
   getConnection,
   listSkillAssignments,
   toRuntimeConnection,
   upsertSkillAssignment,
-  writeAudit,
 } from "../../../../../lib/store";
 
 export const runtime = "nodejs";
@@ -18,9 +19,12 @@ export async function GET(
   if (auth instanceof Response) return auth;
   const { id } = await context.params;
   const agentId = new URL(request.url).searchParams.get("agentId")?.trim();
-  if (!agentId) return Response.json({ error: "agentId is required." }, { status: 400 });
-  const connection = await getConnection(id);
+  if (!agentId || agentId.length > 256) return Response.json({ error: "A valid agentId is required." }, { status: 400 });
+  const connection = await getConnection(id, auth.workspaceId);
   if (!connection) return Response.json({ error: "Connection not found." }, { status: 404 });
+  if (!connection.enabled) {
+    return Response.json({ error: "This connection is disabled." }, { status: 409 });
+  }
   try {
     const [skills, assignments] = await Promise.all([
       runtimeAdapter(connection.runtime).listSkills(toRuntimeConnection(connection), agentId),
@@ -41,46 +45,38 @@ export async function POST(
 ) {
   const auth = await requireApiAuth(request, "skills.write");
   if (auth instanceof Response) return auth;
-  if (Number(request.headers.get("content-length") ?? 0) > 16_384) {
-    return Response.json({ error: "Request is too large." }, { status: 413 });
-  }
   const { id } = await context.params;
-  const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
+  const body = await readJsonObject(request, 16_384);
+  if (body instanceof Response) return body;
   const agentId = typeof body?.agentId === "string" ? body.agentId.trim() : "";
   const skillKey = typeof body?.skillKey === "string" ? body.skillKey.trim() : "";
   if (!agentId || !skillKey || agentId.length > 256 || skillKey.length > 256) {
     return Response.json({ error: "agentId and skillKey are required." }, { status: 400 });
   }
-  const connection = await getConnection(id);
+  const connection = await getConnection(id, auth.workspaceId);
   if (!connection) return Response.json({ error: "Connection not found." }, { status: 404 });
-  try {
-    const runtimeResult =
-      connection.runtime === "openclaw"
-        ? await runtimeAdapter(connection.runtime).installSkill(
-            toRuntimeConnection(connection),
-            agentId,
-            skillKey,
-          )
-        : { assigned: true, note: "Hermes skill must already be installed on the runtime." };
-    const assignment = await upsertSkillAssignment({
-      connectionId: id,
-      agentId,
-      skillKey,
-      metadata: { runtime: connection.runtime },
-    });
-    await writeAudit({
-      actor: auth.actor,
-      action: connection.runtime === "openclaw" ? "skill.install" : "skill.assign",
-      targetType: "agent",
-      targetId: agentId,
-      outcome: "completed",
-      metadata: { connectionId: id, skillKey },
-    });
-    return Response.json({ assignment, runtimeResult }, { status: 201 });
-  } catch (error) {
-    return Response.json(
-      { error: error instanceof Error ? error.message : "Could not add skill." },
-      { status: 422 },
-    );
+  if (!connection.enabled) {
+    return Response.json({ error: "This connection is disabled." }, { status: 409 });
   }
+  let runtimeResult: Record<string, unknown>;
+  try {
+    runtimeResult = connection.runtime === "openclaw"
+      ? await runtimeAdapter(connection.runtime).installSkill(toRuntimeConnection(connection), agentId, skillKey)
+      : { assigned: true, note: "Nerve-only assignment; Hermes configuration was not changed." };
+  } catch (error) {
+    return Response.json({ error: error instanceof Error ? error.message : "Skill operation outcome is unknown. Check the runtime before retrying.", state: "unknown" }, { status: 202 });
+  }
+  let assignment;
+  try {
+    assignment = await upsertSkillAssignment({ connectionId: id, agentId, skillKey, metadata: { runtime: connection.runtime } });
+  } catch {
+    return Response.json({ error: connection.runtime === "openclaw"
+      ? "The runtime accepted the installation, but Nerve could not save the assignment. Inspect runtime skills before retrying."
+      : "Nerve could not save the assignment. Refresh before retrying.", state: "unknown" }, { status: 202 });
+  }
+  const warning = await auditSafely({
+    actor: auth.actor, action: connection.runtime === "openclaw" ? "skill.install" : "skill.assign",
+    targetType: "agent", targetId: agentId, outcome: "completed", metadata: { connectionId: id, skillKey, workspaceId: auth.workspaceId ?? "default" },
+  });
+  return Response.json({ assignment, runtimeResult, warning }, { status: 201 });
 }

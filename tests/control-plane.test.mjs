@@ -74,6 +74,7 @@ test("contains a Railway production contract", async () => {
   assert.deepEqual(railway.deploy.preDeployCommand, ["npm run db:migrate"]);
   assert.match(dockerfile, /USER nextjs/);
   assert.match(dockerfile, /node_modules\/postgres/);
+  assert.match(dockerfile, /process\.env\.PORT \|\| 3000/);
   assert.match(environment, /NERVE_ENCRYPTION_KEY=/);
   assert.match(environment, /NERVE_SESSION_SECRET=/);
   assert.match(environment, /NERVE_ADMIN_TOKEN=/);

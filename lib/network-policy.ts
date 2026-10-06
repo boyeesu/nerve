@@ -1,43 +1,32 @@
-import { isIP, type LookupFunction } from "node:net";
+import { BlockList, isIP, type LookupFunction } from "node:net";
 import { lookup, type LookupAddress } from "node:dns";
 import { resolve4, resolve6 } from "node:dns/promises";
 
-function isPrivateIpv4(value: string): boolean {
-  const [a, b] = value.split(".").map(Number);
-  return (
-    a === 10 ||
-    a === 127 ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127) ||
-    a === 0
-  );
+// BlockList also recognizes IPv4-mapped IPv6 addresses.
+const privateAddresses = new BlockList();
+for (const [address, prefix] of [
+  ["0.0.0.0", 8], ["10.0.0.0", 8], ["127.0.0.0", 8],
+  ["172.16.0.0", 12], ["192.168.0.0", 16], ["100.64.0.0", 10],
+] as const) privateAddresses.addSubnet(address, prefix, "ipv4");
+privateAddresses.addAddress("::", "ipv6");
+privateAddresses.addAddress("::1", "ipv6");
+privateAddresses.addSubnet("fc00::", 7, "ipv6");
+
+const linkLocalAddresses = new BlockList();
+linkLocalAddresses.addSubnet("169.254.0.0", 16, "ipv4");
+linkLocalAddresses.addSubnet("fe80::", 10, "ipv6");
+
+function inBlockList(list: BlockList, address: string): boolean {
+  const family = isIP(address);
+  return family !== 0 && list.check(address, family === 4 ? "ipv4" : "ipv6");
 }
 
 function isLinkLocal(value: string): boolean {
-  if (isIP(value) === 4) {
-    return value.startsWith("169.254.");
-  }
-  const normalized = value.toLowerCase();
-  return normalized.startsWith("fe8") ||
-    normalized.startsWith("fe9") ||
-    normalized.startsWith("fea") ||
-    normalized.startsWith("feb");
+  return inBlockList(linkLocalAddresses, value);
 }
 
 function isPrivateAddress(value: string): boolean {
-  if (isIP(value) === 4) return isPrivateIpv4(value) || isLinkLocal(value);
-  if (isIP(value) === 6) {
-    const normalized = value.toLowerCase();
-    return (
-      normalized === "::1" ||
-      normalized === "::" ||
-      normalized.startsWith("fc") ||
-      normalized.startsWith("fd") ||
-      isLinkLocal(normalized)
-    );
-  }
-  return false;
+  return inBlockList(privateAddresses, value) || isLinkLocal(value);
 }
 
 function addressAllowed(address: string): boolean {
@@ -80,7 +69,8 @@ export async function assertSafeRuntimeEndpoint(
     throw new Error("Plaintext runtime connections are disabled. Use TLS or explicitly allow private networks.");
   }
 
-  const addresses = await resolvedAddresses(url.hostname);
+  const hostname = url.hostname.replace(/^\[|\]$/g, "");
+  const addresses = await resolvedAddresses(hostname);
   if (addresses.length === 0) {
     throw new Error("The runtime hostname could not be resolved.");
   }
