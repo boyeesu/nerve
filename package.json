@@ -59,7 +59,7 @@
     "@types/ws": "8.18.1",
     "eslint": "9.39.4",
     "eslint-config-next": "16.3.6",
-    "react-server-dom-webpack": "19.2.8",
+    "react-server-dom-webpack": "19.2.9",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.15",
     "typescript": "5.9.3"
